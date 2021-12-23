@@ -11,6 +11,7 @@ import (
 	"github.com/aquasecurity/fanal/analyzer/config"
 	"github.com/aquasecurity/fanal/artifact"
 	"github.com/aquasecurity/fanal/cache"
+	pkgReport "github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/scanner"
 )
 
@@ -48,4 +49,18 @@ func ImageRun(ctx *cli.Context) error {
 	}
 
 	return Run(ctx.Context, opt, dockerScanner, initFSCache)
+}
+
+// ImageRunLib use trivy as a library
+func ImageRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
+
+	// Disable the lock file scanning
+	opt.DisabledAnalyzers = analyzer.TypeLockfiles
+
+	if opt.Input != "" {
+		// scan tar file
+		return run(ctx, opt, archiveScanner, initFSCache)
+	}
+
+	return run(ctx, opt, dockerScanner, initFSCache)
 }

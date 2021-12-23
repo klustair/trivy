@@ -11,6 +11,7 @@ import (
 	"github.com/aquasecurity/fanal/analyzer/config"
 	"github.com/aquasecurity/fanal/artifact"
 	"github.com/aquasecurity/fanal/cache"
+	pkgReport "github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/scanner"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
@@ -38,4 +39,15 @@ func RepositoryRun(ctx *cli.Context) error {
 	opt.DisabledAnalyzers = append(analyzer.TypeIndividualPkgs, analyzer.TypeOSes...)
 
 	return Run(ctx.Context, opt, repositoryScanner, initFSCache)
+}
+
+func RepositoryRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
+
+	// Do not scan OS packages
+	opt.VulnType = []string{types.VulnTypeLibrary}
+
+	// Disable the OS analyzers and individual package analyzers
+	opt.DisabledAnalyzers = append(analyzer.TypeIndividualPkgs, analyzer.TypeOSes...)
+
+	return run(ctx, opt, repositoryScanner, initFSCache)
 }

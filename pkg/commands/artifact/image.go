@@ -59,8 +59,8 @@ func ImageRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
 
 	if opt.Input != "" {
 		// scan tar file
-		return run(ctx, opt, archiveScanner, initFSCache)
+		return RunLib(ctx, opt, archiveScanner, initFSCache)
 	}
 
-	return run(ctx, opt, dockerScanner, initFSCache)
+	return RunLib(ctx, opt, dockerScanner, initFSCache)
 }

@@ -49,5 +49,5 @@ func RepositoryRunLib(ctx context.Context, opt Option) (pkgReport.Report, error)
 	// Disable the OS analyzers and individual package analyzers
 	opt.DisabledAnalyzers = append(analyzer.TypeIndividualPkgs, analyzer.TypeOSes...)
 
-	return run(ctx, opt, repositoryScanner, initFSCache)
+	return RunLib(ctx, opt, repositoryScanner, initFSCache)
 }

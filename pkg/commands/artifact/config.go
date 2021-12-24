@@ -45,5 +45,5 @@ func ConfigRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
 	opt.SkipDBUpdate = true
 
 	// Run filesystem command internally
-	return run(ctx, opt, filesystemScanner, initFSCache)
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
 }

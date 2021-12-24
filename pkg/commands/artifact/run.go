@@ -41,6 +41,14 @@ func Run(ctx context.Context, opt Option, initializeScanner InitializeScanner, i
 	return runWithTimeout(ctx, opt, initializeScanner, initCache)
 }
 
+// Run performs artifact scanning as library
+func RunLib(ctx context.Context, opt Option, initializeScanner InitializeScanner, initCache InitCache) (pkgReport.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, opt.Timeout)
+	defer cancel()
+
+	return run(ctx, opt, initializeScanner, initCache)
+}
+
 func runWithTimeout(ctx context.Context, opt Option, initializeScanner InitializeScanner, initCache InitCache) error {
 	_, err := run(ctx, opt, initializeScanner, initCache)
 	return err

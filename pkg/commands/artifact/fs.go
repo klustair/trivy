@@ -42,7 +42,7 @@ func FilesystemRunLib(ctx context.Context, opt Option) (pkgReport.Report, error)
 	// Disable the individual package scanning
 	opt.DisabledAnalyzers = analyzer.TypeIndividualPkgs
 
-	return run(ctx, opt, filesystemScanner, initFSCache)
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
 }
 
 // RootfsRun runs scan on rootfs.
@@ -63,5 +63,5 @@ func RootfsRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
 	// Disable the lock file scanning
 	opt.DisabledAnalyzers = analyzer.TypeLockfiles
 
-	return run(ctx, opt, filesystemScanner, initFSCache)
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
 }

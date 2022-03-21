@@ -1,10 +1,13 @@
 package artifact
 
 import (
+	"context"
+
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/aquasecurity/fanal/analyzer"
+	pkgReport "github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
 
@@ -27,4 +30,20 @@ func ConfigRun(ctx *cli.Context) error {
 
 	// Run filesystem command internally
 	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
+}
+
+func ConfigRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
+
+	// Disable OS and language analyzers
+	opt.DisabledAnalyzers = append(analyzer.TypeOSes, analyzer.TypeLanguages...)
+
+	// Scan only config files
+	opt.VulnType = nil
+	opt.SecurityChecks = []string{types.SecurityCheckConfig}
+
+	// Skip downloading vulnerability DB
+	opt.SkipDBUpdate = true
+
+	// Run filesystem command internally
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
 }

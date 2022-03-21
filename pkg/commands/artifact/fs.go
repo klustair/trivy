@@ -11,6 +11,7 @@ import (
 	"github.com/aquasecurity/fanal/analyzer/config"
 	"github.com/aquasecurity/fanal/artifact"
 	"github.com/aquasecurity/fanal/cache"
+	pkgReport "github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/scanner"
 )
 
@@ -36,6 +37,14 @@ func FilesystemRun(ctx *cli.Context) error {
 	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
 }
 
+func FilesystemRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
+
+	// Disable the individual package scanning
+	opt.DisabledAnalyzers = analyzer.TypeIndividualPkgs
+
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
+}
+
 // RootfsRun runs scan on rootfs.
 func RootfsRun(ctx *cli.Context) error {
 	opt, err := initOption(ctx)
@@ -47,4 +56,12 @@ func RootfsRun(ctx *cli.Context) error {
 	opt.DisabledAnalyzers = analyzer.TypeLockfiles
 
 	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
+}
+
+func RootfsRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
+
+	// Disable the lock file scanning
+	opt.DisabledAnalyzers = analyzer.TypeLockfiles
+
+	return RunLib(ctx, opt, filesystemScanner, initFSCache)
 }

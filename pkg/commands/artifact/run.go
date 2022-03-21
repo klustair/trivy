@@ -41,17 +41,32 @@ func Run(ctx context.Context, opt Option, initializeScanner InitializeScanner, i
 	return runWithTimeout(ctx, opt, initializeScanner, initCache)
 }
 
+// Run performs artifact scanning as library
+func RunLib(ctx context.Context, opt Option, initializeScanner InitializeScanner, initCache InitCache) (pkgReport.Report, error) {
+	ctx, cancel := context.WithTimeout(ctx, opt.Timeout)
+	defer cancel()
+
+	return run(ctx, opt, initializeScanner, initCache)
+}
+
 func runWithTimeout(ctx context.Context, opt Option, initializeScanner InitializeScanner, initCache InitCache) error {
+	_, err := run(ctx, opt, initializeScanner, initCache)
+	return err
+}
+
+func run(ctx context.Context, opt Option, initializeScanner InitializeScanner, initCache InitCache) (pkgReport.Report, error) {
+
+	emptyReport := pkgReport.Report{}
 	if err := log.InitLogger(opt.Debug, opt.Quiet); err != nil {
-		return err
+		return emptyReport, err
 	}
 
 	cacheClient, err := initCache(opt)
 	if err != nil {
 		if errors.Is(err, errSkipScan) {
-			return nil
+			return emptyReport, nil
 		}
-		return xerrors.Errorf("cache error: %w", err)
+		return emptyReport, xerrors.Errorf("cache error: %w", err)
 	}
 	defer cacheClient.Close()
 
@@ -59,21 +74,21 @@ func runWithTimeout(ctx context.Context, opt Option, initializeScanner Initializ
 	if utils.StringInSlice(types.SecurityCheckVulnerability, opt.SecurityChecks) {
 		if err = initDB(opt); err != nil {
 			if errors.Is(err, errSkipScan) {
-				return nil
+				return emptyReport, nil
 			}
-			return xerrors.Errorf("DB error: %w", err)
+			return emptyReport, xerrors.Errorf("DB error: %w", err)
 		}
 		defer db.Close()
 	}
 
 	report, err := scan(ctx, opt, initializeScanner, cacheClient)
 	if err != nil {
-		return xerrors.Errorf("scan error: %w", err)
+		return emptyReport, xerrors.Errorf("scan error: %w", err)
 	}
 
 	report, err = filter(ctx, opt, report)
 	if err != nil {
-		return xerrors.Errorf("filter error: %w", err)
+		return emptyReport, xerrors.Errorf("filter error: %w", err)
 	}
 
 	if err = pkgReport.Write(report, pkgReport.Option{
@@ -85,12 +100,12 @@ func runWithTimeout(ctx context.Context, opt Option, initializeScanner Initializ
 		IncludeNonFailures: opt.IncludeNonFailures,
 		Trace:              opt.Trace,
 	}); err != nil {
-		return xerrors.Errorf("unable to write results: %w", err)
+		return emptyReport, xerrors.Errorf("unable to write results: %w", err)
 	}
 
 	exit(opt, report.Results)
 
-	return nil
+	return report, nil
 }
 
 func initFSCache(c Option) (cache.Cache, error) {

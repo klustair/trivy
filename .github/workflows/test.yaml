@@ -10,7 +10,7 @@ on:
       - 'LICENSE'
   pull_request:
 env:
-  GO_VERSION: "1.17"
+  GO_VERSION: "1.18"
 jobs:
   test:
     name: Test
@@ -24,9 +24,9 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v2
+        uses: golangci/golangci-lint-action@v3.1.0
         with:
-          version: v1.41
+          version: v1.45
           args: --deadline=30m
 
       - name: Run unit tests
@@ -75,7 +75,7 @@ jobs:
     - name: Run GoReleaser
       uses: goreleaser/goreleaser-action@v2
       with:
-        version: v0.183.0
+        version: v1.4.1
         args: release --snapshot --rm-dist --skip-publish
 
   build-documents:
@@ -87,7 +87,7 @@ jobs:
       with:
         fetch-depth: 0
         persist-credentials: true
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v3
       with:
         python-version: 3.x
     - name: Install dependencies

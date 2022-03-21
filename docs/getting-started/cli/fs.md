@@ -9,7 +9,7 @@ USAGE:
 
 OPTIONS:
    --template value, -t value                     output template [$TRIVY_TEMPLATE]
-   --format value, -f value                       format (table, json, template) (default: "table") [$TRIVY_FORMAT]
+   --format value, -f value                       format (table, json, sarif, template) (default: "table") [$TRIVY_FORMAT]
    --severity value, -s value                     severities of vulnerabilities to be displayed (comma separated) (default: "UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL") [$TRIVY_SEVERITY]
    --output value, -o value                       output file name [$TRIVY_OUTPUT]
    --exit-code value                              Exit code when vulnerabilities were found (default: 0) [$TRIVY_EXIT_CODE]
@@ -31,5 +31,9 @@ OPTIONS:
    --config-policy value                          specify paths to the Rego policy files directory, applying config files [$TRIVY_CONFIG_POLICY]
    --config-data value                            specify paths from which data for the Rego policies will be recursively loaded [$TRIVY_CONFIG_DATA]
    --policy-namespaces value, --namespaces value  Rego namespaces (default: "users") [$TRIVY_POLICY_NAMESPACES]
+   --server value                                 server address [$TRIVY_SERVER]
+   --token value                                  for authentication [$TRIVY_TOKEN]
+   --token-header value                           specify a header name for token (default: "Trivy-Token") [$TRIVY_TOKEN_HEADER]
+   --custom-headers value                         custom headers [$TRIVY_CUSTOM_HEADERS]
    --help, -h                                     show help (default: false)
 ```

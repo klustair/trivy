@@ -2,51 +2,66 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"net/http"
 
-	ftypes "github.com/aquasecurity/fanal/types"
-
-	"github.com/aquasecurity/trivy/pkg/types"
-
-	"github.com/google/wire"
 	"golang.org/x/xerrors"
 
-	"github.com/aquasecurity/trivy/pkg/report"
+	ftypes "github.com/aquasecurity/fanal/types"
 	r "github.com/aquasecurity/trivy/pkg/rpc"
+	"github.com/aquasecurity/trivy/pkg/types"
 	rpc "github.com/aquasecurity/trivy/rpc/scanner"
 )
 
-// SuperSet binds the dependencies for RPC client
-var SuperSet = wire.NewSet(
-	NewProtobufClient,
-	NewScanner,
-)
-
-// RemoteURL for RPC remote host
-type RemoteURL string
-
-// NewProtobufClient is the factory method to return RPC scanner
-func NewProtobufClient(remoteURL RemoteURL) rpc.Scanner {
-	return rpc.NewScannerProtobufClient(string(remoteURL), &http.Client{})
+type options struct {
+	rpcClient rpc.Scanner
 }
 
-// CustomHeaders for holding HTTP headers
-type CustomHeaders http.Header
+type option func(*options)
+
+// WithRPCClient takes rpc client for testability
+func WithRPCClient(c rpc.Scanner) option {
+	return func(opts *options) {
+		opts.rpcClient = c
+	}
+}
+
+// ScannerOption holds options for RPC client
+type ScannerOption struct {
+	RemoteURL     string
+	Insecure      bool
+	CustomHeaders http.Header
+}
 
 // Scanner implements the RPC scanner
 type Scanner struct {
-	customHeaders CustomHeaders
+	customHeaders http.Header
 	client        rpc.Scanner
 }
 
 // NewScanner is the factory method to return RPC Scanner
-func NewScanner(customHeaders CustomHeaders, s rpc.Scanner) Scanner {
-	return Scanner{customHeaders: customHeaders, client: s}
+func NewScanner(scannerOptions ScannerOption, opts ...option) Scanner {
+	httpClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: scannerOptions.Insecure,
+			},
+		},
+	}
+
+	c := rpc.NewScannerProtobufClient(scannerOptions.RemoteURL, httpClient)
+
+	o := &options{rpcClient: c}
+	for _, opt := range opts {
+		opt(o)
+	}
+
+	return Scanner{customHeaders: scannerOptions.CustomHeaders, client: o.rpcClient}
 }
 
 // Scan scans the image
-func (s Scanner) Scan(target, artifactKey string, blobKeys []string, options types.ScanOptions) (report.Results, *ftypes.OS, error) {
-	ctx := WithCustomHeaders(context.Background(), http.Header(s.customHeaders))
+func (s Scanner) Scan(target, artifactKey string, blobKeys []string, options types.ScanOptions) (types.Results, *ftypes.OS, error) {
+	ctx := WithCustomHeaders(context.Background(), s.customHeaders)
 
 	var res *rpc.ScanResponse
 	err := r.Retry(func() error {

@@ -54,13 +54,7 @@ build:
 
 .PHONY: protoc
 protoc:
-	docker build -t trivy-protoc - < Dockerfile.protoc
-	docker run --rm -it -v ${PWD}:/app -w /app trivy-protoc make _$@
-
-_protoc:
-	for path in `find ./rpc/ -name "*.proto" -type f`; do \
-		protoc --twirp_out=. --twirp_opt=paths=source_relative --go_out=. --go_opt=paths=source_relative $${path} || exit; \
-	done
+	find ./rpc/ -name "*.proto" -type f -exec protoc --proto_path=$(GOSRC):. --twirp_out=. --twirp_opt=paths=source_relative --go_out=. --go_opt=paths=source_relative {} \;
 
 .PHONY: install
 install:

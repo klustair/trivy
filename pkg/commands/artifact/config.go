@@ -29,7 +29,7 @@ func ConfigRun(ctx *cli.Context) error {
 	opt.SkipDBUpdate = true
 
 	// Run filesystem command internally
-	return Run(ctx.Context, opt, filesystemStandaloneScanner, initCache)
+	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
 }
 
 func ConfigRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {

@@ -2,7 +2,6 @@ package artifact
 
 import (
 	"flag"
-	"net/http"
 	"os"
 	"testing"
 
@@ -62,81 +61,6 @@ func TestOption_Init(t *testing.T) {
 			},
 		},
 		{
-			name: "happy path with token and token header",
-			args: []string{"--server", "http://localhost:8080", "--token", "secret", "--token-header", "X-Trivy-Token", "alpine:3.11"},
-			want: Option{
-				ReportOption: option.ReportOption{
-					Severities:     []dbTypes.Severity{dbTypes.SeverityCritical},
-					Output:         os.Stdout,
-					VulnType:       []string{types.VulnTypeOS, types.VulnTypeLibrary},
-					SecurityChecks: []string{types.SecurityCheckVulnerability},
-				},
-				ArtifactOption: option.ArtifactOption{
-					Target: "alpine:3.11",
-				},
-				RemoteOption: option.RemoteOption{
-					RemoteAddr: "http://localhost:8080",
-					CustomHeaders: http.Header{
-						"X-Trivy-Token": []string{"secret"},
-					},
-				},
-			},
-		},
-		{
-			name: "invalid option combination: token and token header without server",
-			args: []string{"--token", "secret", "--token-header", "X-Trivy-Token", "alpine:3.11"},
-			logs: []string{
-				"'--token', '--token-header' and 'custom-header' can be used only with '--server'",
-			},
-			want: Option{
-				ReportOption: option.ReportOption{
-					Severities:     []dbTypes.Severity{dbTypes.SeverityCritical},
-					Output:         os.Stdout,
-					VulnType:       []string{types.VulnTypeOS, types.VulnTypeLibrary},
-					SecurityChecks: []string{types.SecurityCheckVulnerability},
-				},
-				ArtifactOption: option.ArtifactOption{
-					Target: "alpine:3.11",
-				},
-			},
-		},
-		{
-			name: "happy path with good custom headers",
-			args: []string{"--server", "http://localhost:8080", "--custom-headers", "foo:bar", "alpine:3.11"},
-			want: Option{
-				ReportOption: option.ReportOption{
-					Severities:     []dbTypes.Severity{dbTypes.SeverityCritical},
-					Output:         os.Stdout,
-					VulnType:       []string{types.VulnTypeOS, types.VulnTypeLibrary},
-					SecurityChecks: []string{types.SecurityCheckVulnerability},
-				},
-				ArtifactOption: option.ArtifactOption{
-					Target: "alpine:3.11",
-				},
-				RemoteOption: option.RemoteOption{
-					RemoteAddr: "http://localhost:8080",
-					CustomHeaders: http.Header{
-						"Foo": []string{"bar"},
-					}},
-			},
-		},
-		{
-			name: "happy path with bad custom headers",
-			args: []string{"--server", "http://localhost:8080", "--custom-headers", "foobaz", "alpine:3.11"},
-			want: Option{
-				ReportOption: option.ReportOption{
-					Severities:     []dbTypes.Severity{dbTypes.SeverityCritical},
-					Output:         os.Stdout,
-					VulnType:       []string{types.VulnTypeOS, types.VulnTypeLibrary},
-					SecurityChecks: []string{types.SecurityCheckVulnerability},
-				},
-				ArtifactOption: option.ArtifactOption{
-					Target: "alpine:3.11",
-				},
-				RemoteOption: option.RemoteOption{RemoteAddr: "http://localhost:8080", CustomHeaders: http.Header{}},
-			},
-		},
-		{
 			name: "happy path: reset",
 			args: []string{"--reset"},
 			want: Option{
@@ -173,7 +97,7 @@ func TestOption_Init(t *testing.T) {
 			name: "invalid option combination: --template enabled without --format",
 			args: []string{"--template", "@contrib/gitlab.tpl", "gitlab/gitlab-ce:12.7.2-ce.0"},
 			logs: []string{
-				"'--template' is ignored because '--format template' is not specified. Use '--template' option with '--format template' option.",
+				"--template is ignored because --format template is not specified. Use --template option with --format template option.",
 			},
 			want: Option{
 				ReportOption: option.ReportOption{
@@ -192,7 +116,7 @@ func TestOption_Init(t *testing.T) {
 			name: "invalid option combination: --template and --format json",
 			args: []string{"--format", "json", "--template", "@contrib/gitlab.tpl", "gitlab/gitlab-ce:12.7.2-ce.0"},
 			logs: []string{
-				"'--template' is ignored because '--format json' is specified. Use '--template' option with '--format template' option.",
+				"--template is ignored because --format json is specified. Use --template option with --format template option.",
 			},
 			want: Option{
 				ReportOption: option.ReportOption{
@@ -212,7 +136,7 @@ func TestOption_Init(t *testing.T) {
 			name: "invalid option combination: --format template without --template",
 			args: []string{"--format", "template", "--severity", "MEDIUM", "gitlab/gitlab-ce:12.7.2-ce.0"},
 			logs: []string{
-				"'--format template' is ignored because '--template' is not specified. Specify '--template' option when you use '--format template'.",
+				"--format template is ignored because --template not is specified. Specify --template option when you use --format template.",
 			},
 			want: Option{
 				ReportOption: option.ReportOption{
@@ -258,10 +182,6 @@ func TestOption_Init(t *testing.T) {
 			set.String("security-checks", "vuln", "")
 			set.String("template", "", "")
 			set.String("format", "", "")
-			set.String("server", "", "")
-			set.String("token", "", "")
-			set.String("token-header", "", "")
-			set.Var(&cli.StringSlice{}, "custom-headers", "")
 
 			ctx := cli.NewContext(app, set, nil)
 			_ = set.Parse(tt.args)

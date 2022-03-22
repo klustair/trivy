@@ -14,10 +14,12 @@ type MockOperation struct {
 }
 
 type OperationDownloadArgs struct {
-	Ctx         context.Context
-	CtxAnything bool
-	Dst         string
-	DstAnything bool
+	Ctx              context.Context
+	CtxAnything      bool
+	CacheDir         string
+	CacheDirAnything bool
+	Light            bool
+	LightAnything    bool
 }
 
 type OperationDownloadReturns struct {
@@ -36,10 +38,15 @@ func (_m *MockOperation) ApplyDownloadExpectation(e OperationDownloadExpectation
 	} else {
 		args = append(args, e.Args.Ctx)
 	}
-	if e.Args.DstAnything {
+	if e.Args.CacheDirAnything {
 		args = append(args, mock.Anything)
 	} else {
-		args = append(args, e.Args.Dst)
+		args = append(args, e.Args.CacheDir)
+	}
+	if e.Args.LightAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Light)
 	}
 	_m.On("Download", args...).Return(e.Returns.Err)
 }
@@ -50,13 +57,13 @@ func (_m *MockOperation) ApplyDownloadExpectations(expectations []OperationDownl
 	}
 }
 
-// Download provides a mock function with given fields: ctx, dst
-func (_m *MockOperation) Download(ctx context.Context, dst string) error {
-	ret := _m.Called(ctx, dst)
+// Download provides a mock function with given fields: ctx, cacheDir, light
+func (_m *MockOperation) Download(ctx context.Context, cacheDir string, light bool) error {
+	ret := _m.Called(ctx, cacheDir, light)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = rf(ctx, dst)
+	if rf, ok := ret.Get(0).(func(context.Context, string, bool) error); ok {
+		r0 = rf(ctx, cacheDir, light)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -69,6 +76,8 @@ type OperationNeedsUpdateArgs struct {
 	CliVersionAnything bool
 	Skip               bool
 	SkipAnything       bool
+	Light              bool
+	LightAnything      bool
 }
 
 type OperationNeedsUpdateReturns struct {
@@ -93,6 +102,11 @@ func (_m *MockOperation) ApplyNeedsUpdateExpectation(e OperationNeedsUpdateExpec
 	} else {
 		args = append(args, e.Args.Skip)
 	}
+	if e.Args.LightAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.Light)
+	}
 	_m.On("NeedsUpdate", args...).Return(e.Returns.Need, e.Returns.Err)
 }
 
@@ -102,23 +116,67 @@ func (_m *MockOperation) ApplyNeedsUpdateExpectations(expectations []OperationNe
 	}
 }
 
-// NeedsUpdate provides a mock function with given fields: cliVersion, skip
-func (_m *MockOperation) NeedsUpdate(cliVersion string, skip bool) (bool, error) {
-	ret := _m.Called(cliVersion, skip)
+// NeedsUpdate provides a mock function with given fields: cliVersion, skip, light
+func (_m *MockOperation) NeedsUpdate(cliVersion string, skip bool, light bool) (bool, error) {
+	ret := _m.Called(cliVersion, skip, light)
 
 	var r0 bool
-	if rf, ok := ret.Get(0).(func(string, bool) bool); ok {
-		r0 = rf(cliVersion, skip)
+	if rf, ok := ret.Get(0).(func(string, bool, bool) bool); ok {
+		r0 = rf(cliVersion, skip, light)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, bool) error); ok {
-		r1 = rf(cliVersion, skip)
+	if rf, ok := ret.Get(1).(func(string, bool, bool) error); ok {
+		r1 = rf(cliVersion, skip, light)
 	} else {
 		r1 = ret.Error(1)
 	}
 
 	return r0, r1
+}
+
+type OperationUpdateMetadataArgs struct {
+	CacheDir         string
+	CacheDirAnything bool
+}
+
+type OperationUpdateMetadataReturns struct {
+	Err error
+}
+
+type OperationUpdateMetadataExpectation struct {
+	Args    OperationUpdateMetadataArgs
+	Returns OperationUpdateMetadataReturns
+}
+
+func (_m *MockOperation) ApplyUpdateMetadataExpectation(e OperationUpdateMetadataExpectation) {
+	var args []interface{}
+	if e.Args.CacheDirAnything {
+		args = append(args, mock.Anything)
+	} else {
+		args = append(args, e.Args.CacheDir)
+	}
+	_m.On("UpdateMetadata", args...).Return(e.Returns.Err)
+}
+
+func (_m *MockOperation) ApplyUpdateMetadataExpectations(expectations []OperationUpdateMetadataExpectation) {
+	for _, e := range expectations {
+		_m.ApplyUpdateMetadataExpectation(e)
+	}
+}
+
+// UpdateMetadata provides a mock function with given fields: cacheDir
+func (_m *MockOperation) UpdateMetadata(cacheDir string) error {
+	ret := _m.Called(cacheDir)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(cacheDir)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

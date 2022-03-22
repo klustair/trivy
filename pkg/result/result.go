@@ -10,15 +10,16 @@ import (
 
 	"github.com/google/wire"
 	"github.com/open-policy-agent/opa/rego"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 	"golang.org/x/xerrors"
 
+	ftypes "github.com/aquasecurity/fanal/types"
 	"github.com/aquasecurity/trivy-db/pkg/db"
 	dbTypes "github.com/aquasecurity/trivy-db/pkg/types"
 	"github.com/aquasecurity/trivy-db/pkg/vulnsrc/vulnerability"
 	"github.com/aquasecurity/trivy/pkg/log"
+	"github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/utils"
 )
 
 const (
@@ -27,10 +28,11 @@ const (
 )
 
 var (
-	primaryURLPrefixes = map[dbTypes.SourceID][]string{
+	primaryURLPrefixes = map[string][]string{
 		vulnerability.Debian:           {"http://www.debian.org", "https://www.debian.org"},
 		vulnerability.Ubuntu:           {"http://www.ubuntu.com", "https://usn.ubuntu.com"},
 		vulnerability.RedHat:           {"https://access.redhat.com"},
+		vulnerability.OpenSuseCVRF:     {"http://lists.opensuse.org", "https://lists.opensuse.org"},
 		vulnerability.SuseCVRF:         {"http://lists.opensuse.org", "https://lists.opensuse.org"},
 		vulnerability.OracleOVAL:       {"http://linux.oracle.com/errata", "https://linux.oracle.com/errata"},
 		vulnerability.NodejsSecurityWg: {"https://www.npmjs.com", "https://hackerone.com"},
@@ -64,14 +66,11 @@ func (c Client) FillVulnerabilityInfo(vulns []types.DetectedVulnerability, repor
 			continue
 		}
 
-		// Detect the data source
-		var source dbTypes.SourceID
-		if vulns[i].DataSource != nil {
-			source = vulns[i].DataSource.ID
-		}
+		// Detect which data source should be used.
+		sources := c.detectSource(reportType)
 
 		// Select the severity according to the detected source.
-		severity, severitySource := c.getVendorSeverity(&vuln, source)
+		severity, severitySource := c.getVendorSeverity(&vuln, sources)
 
 		// The vendor might provide package-specific severity like Debian.
 		// For example, CVE-2015-2328 in Debian has "unimportant" for mongodb and "low" for pcre3.
@@ -86,14 +85,42 @@ func (c Client) FillVulnerabilityInfo(vulns []types.DetectedVulnerability, repor
 
 		vulns[i].Severity = severity
 		vulns[i].SeveritySource = severitySource
-		vulns[i].PrimaryURL = c.getPrimaryURL(vulnID, vuln.References, source)
+		vulns[i].PrimaryURL = c.getPrimaryURL(vulnID, vuln.References, sources)
 		vulns[i].Vulnerability.VendorSeverity = nil // Remove VendorSeverity from Results
 	}
 }
+func (c Client) detectSource(reportType string) []string {
+	var sources []string
+	switch reportType {
+	case vulnerability.Ubuntu, vulnerability.Alpine, vulnerability.RedHat, vulnerability.RedHatOVAL,
+		vulnerability.Debian, vulnerability.DebianOVAL, vulnerability.Fedora, vulnerability.Amazon,
+		vulnerability.OracleOVAL, vulnerability.SuseCVRF, vulnerability.OpenSuseCVRF, vulnerability.Photon:
+		sources = []string{reportType}
+	case vulnerability.CentOS: // CentOS doesn't have its own so we use RedHat
+		sources = []string{vulnerability.RedHat}
+	case "npm", "yarn":
+		sources = []string{vulnerability.NodejsSecurityWg, vulnerability.GHSANpm, vulnerability.GLAD}
+	case "nuget":
+		sources = []string{vulnerability.GHSANuget, vulnerability.GLAD}
+	case "pipenv", "poetry":
+		sources = []string{vulnerability.PythonSafetyDB, vulnerability.GHSAPip, vulnerability.GLAD}
+	case "bundler":
+		sources = []string{vulnerability.RubySec, vulnerability.GHSARubygems, vulnerability.GLAD}
+	case "cargo":
+		sources = []string{vulnerability.RustSec}
+	case "composer":
+		sources = []string{vulnerability.PhpSecurityAdvisories, vulnerability.GHSAComposer, vulnerability.GLAD}
+	case ftypes.Jar:
+		sources = []string{vulnerability.GHSAMaven, vulnerability.GLAD}
+	}
+	return sources
+}
 
-func (c Client) getVendorSeverity(vuln *dbTypes.Vulnerability, source dbTypes.SourceID) (string, dbTypes.SourceID) {
-	if vs, ok := vuln.VendorSeverity[source]; ok {
-		return vs.String(), source
+func (c Client) getVendorSeverity(vuln *dbTypes.Vulnerability, sources []string) (string, string) {
+	for _, source := range sources {
+		if vs, ok := vuln.VendorSeverity[source]; ok {
+			return vs.String(), source
+		}
 	}
 
 	// Try NVD as a fallback if it exists
@@ -108,23 +135,25 @@ func (c Client) getVendorSeverity(vuln *dbTypes.Vulnerability, source dbTypes.So
 	return vuln.Severity, ""
 }
 
-func (c Client) getPrimaryURL(vulnID string, refs []string, source dbTypes.SourceID) string {
+func (c Client) getPrimaryURL(vulnID string, refs []string, sources []string) string {
 	switch {
 	case strings.HasPrefix(vulnID, "CVE-"):
 		return "https://avd.aquasec.com/nvd/" + strings.ToLower(vulnID)
 	case strings.HasPrefix(vulnID, "RUSTSEC-"):
-		return "https://osv.dev/vulnerability/" + vulnID
+		return "https://rustsec.org/advisories/" + vulnID
 	case strings.HasPrefix(vulnID, "GHSA-"):
 		return "https://github.com/advisories/" + vulnID
 	case strings.HasPrefix(vulnID, "TEMP-"):
 		return "https://security-tracker.debian.org/tracker/" + vulnID
 	}
 
-	prefixes := primaryURLPrefixes[source]
-	for _, pre := range prefixes {
-		for _, ref := range refs {
-			if strings.HasPrefix(ref, pre) {
-				return ref
+	for _, source := range sources {
+		prefixes := primaryURLPrefixes[source]
+		for _, pre := range prefixes {
+			for _, ref := range refs {
+				if strings.HasPrefix(ref, pre) {
+					return ref
+				}
 			}
 		}
 	}
@@ -134,7 +163,7 @@ func (c Client) getPrimaryURL(vulnID string, refs []string, source dbTypes.Sourc
 // Filter filter out the vulnerabilities
 func (c Client) Filter(ctx context.Context, vulns []types.DetectedVulnerability, misconfs []types.DetectedMisconfiguration,
 	severities []dbTypes.Severity, ignoreUnfixed, includeNonFailures bool, ignoreFile, policyFile string) (
-	[]types.DetectedVulnerability, *types.MisconfSummary, []types.DetectedMisconfiguration, error) {
+	[]types.DetectedVulnerability, *report.MisconfSummary, []types.DetectedMisconfiguration, error) {
 	ignoredIDs := getIgnoredIDs(ignoreFile)
 
 	filteredVulns := filterVulnerabilities(vulns, severities, ignoreUnfixed, ignoredIDs)
@@ -168,7 +197,7 @@ func filterVulnerabilities(vulns []types.DetectedVulnerability, severities []dbT
 			// Ignore unfixed vulnerabilities
 			if ignoreUnfixed && vuln.FixedVersion == "" {
 				continue
-			} else if slices.Contains(ignoredIDs, vuln.VulnerabilityID) {
+			} else if utils.StringInSlice(vuln.VulnerabilityID, ignoredIDs) {
 				continue
 			}
 
@@ -181,19 +210,19 @@ func filterVulnerabilities(vulns []types.DetectedVulnerability, severities []dbT
 			break
 		}
 	}
-	return maps.Values(uniqVulns)
+	return toSlice(uniqVulns)
 }
 
 func filterMisconfigurations(misconfs []types.DetectedMisconfiguration, severities []dbTypes.Severity,
-	includeNonFailures bool, ignoredIDs []string) (*types.MisconfSummary, []types.DetectedMisconfiguration) {
+	includeNonFailures bool, ignoredIDs []string) (*report.MisconfSummary, []types.DetectedMisconfiguration) {
 	var filtered []types.DetectedMisconfiguration
-	summary := new(types.MisconfSummary)
+	summary := new(report.MisconfSummary)
 
 	for _, misconf := range misconfs {
 		// Filter misconfigurations by severity
 		for _, s := range severities {
 			if s.String() == misconf.Severity {
-				if slices.Contains(ignoredIDs, misconf.ID) {
+				if utils.StringInSlice(misconf.ID, ignoredIDs) {
 					continue
 				}
 
@@ -216,7 +245,7 @@ func filterMisconfigurations(misconfs []types.DetectedMisconfiguration, severiti
 	return summary, filtered
 }
 
-func summarize(status types.MisconfStatus, summary *types.MisconfSummary) {
+func summarize(status types.MisconfStatus, summary *report.MisconfSummary) {
 	switch status {
 	case types.StatusFailure:
 		summary.Failures++
@@ -225,6 +254,16 @@ func summarize(status types.MisconfStatus, summary *types.MisconfSummary) {
 	case types.StatusException:
 		summary.Exceptions++
 	}
+}
+
+func toSlice(uniqVulns map[string]types.DetectedVulnerability) []types.DetectedVulnerability {
+	// Convert map to slice
+	var vulnerabilities []types.DetectedVulnerability
+	for _, vuln := range uniqVulns {
+		vulnerabilities = append(vulnerabilities, vuln)
+	}
+
+	return vulnerabilities
 }
 
 func applyPolicy(ctx context.Context, vulns []types.DetectedVulnerability, misconfs []types.DetectedMisconfiguration,
@@ -292,7 +331,6 @@ func getIgnoredIDs(ignoreFile string) []string {
 		// trivy must work even if no .trivyignore exist
 		return nil
 	}
-	log.Logger.Debugf("Found an ignore file %s", ignoreFile)
 
 	var ignoredIDs []string
 	scanner := bufio.NewScanner(f)
@@ -304,9 +342,6 @@ func getIgnoredIDs(ignoreFile string) []string {
 		}
 		ignoredIDs = append(ignoredIDs, line)
 	}
-
-	log.Logger.Debugf("These IDs will be ignored: %q", ignoredIDs)
-
 	return ignoredIDs
 }
 

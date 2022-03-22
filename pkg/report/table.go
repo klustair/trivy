@@ -8,10 +8,10 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
-	"golang.org/x/exp/slices"
 
 	dbTypes "github.com/aquasecurity/trivy-db/pkg/types"
 	"github.com/aquasecurity/trivy/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/utils"
 )
 
 // TableWriter implements Writer and output in tabular form
@@ -19,20 +19,23 @@ type TableWriter struct {
 	Severities []dbTypes.Severity
 	Output     io.Writer
 
+	// For vulnerabilities
+	Light bool
+
 	// For misconfigurations
 	IncludeNonFailures bool
 	Trace              bool
 }
 
 // Write writes the result on standard output
-func (tw TableWriter) Write(report types.Report) error {
+func (tw TableWriter) Write(report Report) error {
 	for _, result := range report.Results {
 		tw.write(result)
 	}
 	return nil
 }
 
-func (tw TableWriter) write(result types.Result) {
+func (tw TableWriter) write(result Result) {
 	table := tablewriter.NewWriter(tw.Output)
 
 	var severityCount map[string]int
@@ -45,7 +48,7 @@ func (tw TableWriter) write(result types.Result) {
 	total, summaries := tw.summary(severityCount)
 
 	target := result.Target
-	if result.Class != types.ClassOSPkg {
+	if result.Class != ClassOSPkg {
 		target += fmt.Sprintf(" (%s)", result.Type)
 	}
 
@@ -87,7 +90,7 @@ func (tw TableWriter) summary(severityCount map[string]int) (int, []string) {
 
 	var summaries []string
 	for _, severity := range dbTypes.SeverityNames {
-		if !slices.Contains(severities, severity) {
+		if !utils.StringInSlice(severity, severities) {
 			continue
 		}
 		count := severityCount[severity]
@@ -100,7 +103,10 @@ func (tw TableWriter) summary(severityCount map[string]int) (int, []string) {
 }
 
 func (tw TableWriter) writeVulnerabilities(table *tablewriter.Table, vulns []types.DetectedVulnerability) map[string]int {
-	header := []string{"Library", "Vulnerability ID", "Severity", "Installed Version", "Fixed Version", "Title"}
+	header := []string{"Library", "Vulnerability ID", "Severity", "Installed Version", "Fixed Version"}
+	if !tw.Light {
+		header = append(header, "Title")
+	}
 	table.SetHeader(header)
 	severityCount := tw.setVulnerabilityRows(table, vulns)
 
@@ -150,11 +156,14 @@ func (tw TableWriter) setVulnerabilityRows(table *tablewriter.Table, vulns []typ
 		var row []string
 		if tw.Output == os.Stdout {
 			row = []string{v.PkgName, v.VulnerabilityID, dbTypes.ColorizeSeverity(v.Severity),
-				v.InstalledVersion, v.FixedVersion, strings.TrimSpace(title)}
+				v.InstalledVersion, v.FixedVersion}
 		} else {
-			row = []string{v.PkgName, v.VulnerabilityID, v.Severity, v.InstalledVersion, v.FixedVersion, strings.TrimSpace(title)}
+			row = []string{v.PkgName, v.VulnerabilityID, v.Severity, v.InstalledVersion, v.FixedVersion}
 		}
 
+		if !tw.Light {
+			row = append(row, strings.TrimSpace(title))
+		}
 		table.Append(row)
 	}
 	return severityCount
@@ -198,7 +207,7 @@ func (tw TableWriter) setMisconfRows(table *tablewriter.Table, misconfs []types.
 	return severityCount
 }
 
-func (tw TableWriter) outputTrace(result types.Result) {
+func (tw TableWriter) outputTrace(result Result) {
 	blue := color.New(color.FgBlue).SprintFunc()
 	green := color.New(color.FgGreen).SprintfFunc()
 	red := color.New(color.FgRed).SprintfFunc()

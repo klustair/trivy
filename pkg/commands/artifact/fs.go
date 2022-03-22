@@ -2,29 +2,22 @@ package artifact
 
 import (
 	"context"
+	"time"
 
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/aquasecurity/fanal/analyzer"
+	"github.com/aquasecurity/fanal/analyzer/config"
+	"github.com/aquasecurity/fanal/artifact"
+	"github.com/aquasecurity/fanal/cache"
 	pkgReport "github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/scanner"
 )
 
-// filesystemStandaloneScanner initializes a filesystem scanner in standalone mode
-func filesystemStandaloneScanner(ctx context.Context, conf scannerConfig) (scanner.Scanner, func(), error) {
-	s, cleanup, err := initializeFilesystemScanner(ctx, conf.Target, conf.ArtifactCache, conf.LocalArtifactCache,
-		conf.ArtifactOption, conf.MisconfOption)
-	if err != nil {
-		return scanner.Scanner{}, func() {}, xerrors.Errorf("unable to initialize a filesystem scanner: %w", err)
-	}
-	return s, cleanup, nil
-}
-
-// filesystemRemoteScanner initializes a filesystem scanner in client/server mode
-func filesystemRemoteScanner(ctx context.Context, conf scannerConfig) (scanner.Scanner, func(), error) {
-	s, cleanup, err := initializeRemoteFilesystemScanner(ctx, conf.Target, conf.ArtifactCache, conf.RemoteOption,
-		conf.ArtifactOption, conf.MisconfOption)
+func filesystemScanner(ctx context.Context, dir string, ac cache.ArtifactCache, lac cache.LocalArtifactCache,
+	_ time.Duration, artifactOpt artifact.Option, scannerOpt config.ScannerOption) (scanner.Scanner, func(), error) {
+	s, cleanup, err := initializeFilesystemScanner(ctx, dir, ac, lac, artifactOpt, scannerOpt)
 	if err != nil {
 		return scanner.Scanner{}, func() {}, xerrors.Errorf("unable to initialize a filesystem scanner: %w", err)
 	}
@@ -41,13 +34,7 @@ func FilesystemRun(ctx *cli.Context) error {
 	// Disable the individual package scanning
 	opt.DisabledAnalyzers = analyzer.TypeIndividualPkgs
 
-	// client/server mode
-	if opt.RemoteAddr != "" {
-		return Run(ctx.Context, opt, filesystemRemoteScanner, initCache)
-	}
-
-	// standalone mode
-	return Run(ctx.Context, opt, filesystemStandaloneScanner, initCache)
+	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
 }
 
 func FilesystemRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {
@@ -68,13 +55,7 @@ func RootfsRun(ctx *cli.Context) error {
 	// Disable the lock file scanning
 	opt.DisabledAnalyzers = analyzer.TypeLockfiles
 
-	// client/server mode
-	if opt.RemoteAddr != "" {
-		return Run(ctx.Context, opt, filesystemRemoteScanner, initCache)
-	}
-
-	// standalone mode
-	return Run(ctx.Context, opt, filesystemStandaloneScanner, initCache)
+	return Run(ctx.Context, opt, filesystemScanner, initFSCache)
 }
 
 func RootfsRunLib(ctx context.Context, opt Option) (pkgReport.Report, error) {

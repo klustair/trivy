@@ -71,8 +71,6 @@ nav:
       - Overview: advanced/index.md
       - Plugins: advanced/plugins.md
       - Air-Gapped Environment: advanced/air-gap.md
-      - SBOM:
-          - CycloneDX: advanced/sbom/cyclonedx.md
       - Integrations:
           - Overview: advanced/integrations/index.md
           - GitHub Actions: advanced/integrations/github-actions.md
@@ -92,7 +90,6 @@ nav:
               - Docker Hub: advanced/private-registries/docker-hub.md
               - AWS ECR (Elastic Container Registry): advanced/private-registries/ecr.md
               - GCR (Google Container Registry): advanced/private-registries/gcr.md
-              - ACR (Azure Container Registry): advanced/private-registries/acr.md
               - Self-Hosted: advanced/private-registries/self.md
       - Modes:
           - Standalone: advanced/modes/standalone.md

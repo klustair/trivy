@@ -1,8 +1,6 @@
 package types
 
-import (
-	"golang.org/x/exp/slices"
-)
+import "github.com/aquasecurity/trivy/pkg/utils"
 
 // VulnType represents vulnerability type
 type VulnType = string
@@ -37,7 +35,7 @@ var (
 
 // NewVulnType returns an instance of VulnType
 func NewVulnType(s string) VulnType {
-	if slices.Contains(vulnTypes, s) {
+	if utils.StringInSlice(s, vulnTypes) {
 		return s
 	}
 	return VulnTypeUnknown
@@ -45,7 +43,7 @@ func NewVulnType(s string) VulnType {
 
 // NewSecurityCheck returns an instance of SecurityCheck
 func NewSecurityCheck(s string) SecurityCheck {
-	if slices.Contains(securityChecks, s) {
+	if utils.StringInSlice(s, securityChecks) {
 		return s
 	}
 	return SecurityCheckUnknown

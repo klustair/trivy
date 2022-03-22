@@ -2,17 +2,15 @@ package operation
 
 import (
 	"context"
-	"crypto/tls"
 	"os"
 	"strings"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/google/wire"
+	"github.com/spf13/afero"
 	"golang.org/x/xerrors"
 
 	"github.com/aquasecurity/fanal/cache"
-	"github.com/aquasecurity/trivy-db/pkg/metadata"
-	"github.com/aquasecurity/trivy/pkg/commands/option"
 	"github.com/aquasecurity/trivy/pkg/db"
 	"github.com/aquasecurity/trivy/pkg/log"
 	"github.com/aquasecurity/trivy/pkg/policy"
@@ -32,32 +30,16 @@ type Cache struct {
 }
 
 // NewCache is the factory method for Cache
-func NewCache(c option.CacheOption) (Cache, error) {
-	if strings.HasPrefix(c.CacheBackend, "redis://") {
-		log.Logger.Infof("Redis cache: %s", c.CacheBackend)
-		options, err := redis.ParseURL(c.CacheBackend)
+func NewCache(backend string) (Cache, error) {
+	if strings.HasPrefix(backend, "redis://") {
+		log.Logger.Infof("Redis cache: %s", backend)
+		options, err := redis.ParseURL(backend)
 		if err != nil {
 			return Cache{}, err
 		}
-
-		if (option.RedisOption{}) != c.RedisOption {
-			caCert, cert, err := utils.GetTLSConfig(c.RedisCACert, c.RedisCert, c.RedisKey)
-			if err != nil {
-				return Cache{}, err
-			}
-
-			options.TLSConfig = &tls.Config{
-				RootCAs:      caCert,
-				Certificates: []tls.Certificate{cert},
-				MinVersion:   tls.VersionTLS12,
-			}
-		}
-
 		redisCache := cache.NewRedisCache(options)
 		return Cache{Cache: redisCache}, nil
 	}
-
-	// standalone mode
 	fsCache, err := cache.NewFSCache(utils.CacheDir())
 	if err != nil {
 		return Cache{}, xerrors.Errorf("unable to initialize fs cache: %w", err)
@@ -95,10 +77,10 @@ func (c Cache) ClearArtifacts() error {
 }
 
 // DownloadDB downloads the DB
-func DownloadDB(appVersion, cacheDir string, quiet, skipUpdate bool) error {
-	client := db.NewClient(cacheDir, quiet)
+func DownloadDB(appVersion, cacheDir string, quiet, light, skipUpdate bool) error {
+	client := initializeDBClient(cacheDir, quiet)
 	ctx := context.Background()
-	needsUpdate, err := client.NeedsUpdate(appVersion, skipUpdate)
+	needsUpdate, err := client.NeedsUpdate(appVersion, light, skipUpdate)
 	if err != nil {
 		return xerrors.Errorf("database error: %w", err)
 	}
@@ -106,8 +88,11 @@ func DownloadDB(appVersion, cacheDir string, quiet, skipUpdate bool) error {
 	if needsUpdate {
 		log.Logger.Info("Need to update DB")
 		log.Logger.Info("Downloading DB...")
-		if err = client.Download(ctx, cacheDir); err != nil {
+		if err = client.Download(ctx, cacheDir, light); err != nil {
 			return xerrors.Errorf("failed to download vulnerability DB: %w", err)
+		}
+		if err = client.UpdateMetadata(cacheDir); err != nil {
+			return xerrors.Errorf("unable to update database metadata: %w", err)
 		}
 	}
 
@@ -119,8 +104,8 @@ func DownloadDB(appVersion, cacheDir string, quiet, skipUpdate bool) error {
 }
 
 // InitBuiltinPolicies downloads the built-in policies and loads them
-func InitBuiltinPolicies(ctx context.Context, cacheDir string, quiet, skipUpdate bool) ([]string, error) {
-	client, err := policy.NewClient(cacheDir, quiet)
+func InitBuiltinPolicies(ctx context.Context, skipUpdate bool) ([]string, error) {
+	client, err := policy.NewClient()
 	if err != nil {
 		return nil, xerrors.Errorf("policy client error: %w", err)
 	}
@@ -153,12 +138,12 @@ func InitBuiltinPolicies(ctx context.Context, cacheDir string, quiet, skipUpdate
 }
 
 func showDBInfo(cacheDir string) error {
-	m := metadata.NewClient(cacheDir)
-	meta, err := m.Get()
+	m := db.NewMetadata(afero.NewOsFs(), cacheDir)
+	metadata, err := m.Get()
 	if err != nil {
 		return xerrors.Errorf("something wrong with DB: %w", err)
 	}
-	log.Logger.Debugf("DB Schema: %d, UpdatedAt: %s, NextUpdate: %s, DownloadedAt: %s",
-		meta.Version, meta.UpdatedAt, meta.NextUpdate, meta.DownloadedAt)
+	log.Logger.Debugf("DB Schema: %d, Type: %d, UpdatedAt: %s, NextUpdate: %s, DownloadedAt: %s",
+		metadata.Version, metadata.Type, metadata.UpdatedAt, metadata.NextUpdate, metadata.DownloadedAt)
 	return nil
 }

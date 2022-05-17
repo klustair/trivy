@@ -4,8 +4,6 @@
 package integration
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -19,20 +17,19 @@ import (
 	"testing"
 
 	"github.com/docker/go-connections/nat"
-	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	_ "github.com/aquasecurity/fanal/analyzer"
+	testdocker "github.com/aquasecurity/trivy/integration/docker"
 	"github.com/aquasecurity/trivy/pkg/commands"
 )
 
 const (
-	registryImage = "registry:2.7.0"
+	registryImage = "registry:2"
 	registryPort  = "5443/tcp"
 
 	authImage    = "cesanta/docker_auth:1"
@@ -55,10 +52,9 @@ func setupRegistry(ctx context.Context, baseDir string, authURL *url.URL) (testc
 			"REGISTRY_AUTH_TOKEN_SERVICE":        "registry.docker.io",
 			"REGISTRY_AUTH_TOKEN_ISSUER":         "Trivy auth server",
 			"REGISTRY_AUTH_TOKEN_ROOTCERTBUNDLE": "/certs/cert.pem",
-			"REGISTRY_AUTH_TOKEN_AUTOREDIRECT":   "false",
 		},
 		BindMounts: map[string]string{
-			"/certs": filepath.Join(baseDir, "data", "certs"),
+			filepath.Join(baseDir, "data", "certs"): "/certs",
 		},
 		SkipReaper: true,
 		AutoRemove: true,
@@ -78,8 +74,8 @@ func setupAuthServer(ctx context.Context, baseDir string) (testcontainers.Contai
 		Image:        authImage,
 		ExposedPorts: []string{authPort},
 		BindMounts: map[string]string{
-			"/config": filepath.Join(baseDir, "data", "auth_config"),
-			"/certs":  filepath.Join(baseDir, "data", "certs"),
+			filepath.Join(baseDir, "data", "auth_config"): "/config",
+			filepath.Join(baseDir, "data", "certs"):       "/certs",
 		},
 		SkipReaper: true,
 		AutoRemove: true,
@@ -137,12 +133,13 @@ func TestRegistry(t *testing.T) {
 	registryURL, err := getURL(ctx, registryC, registryPort)
 	require.NoError(t, err)
 
-	auth := &authn.Basic{
+	config := testdocker.RegistryConfig{
+		URL:      registryURL,
 		Username: authUsername,
 		Password: authPassword,
 	}
 
-	tests := []struct {
+	testCases := []struct {
 		name      string
 		imageName string
 		imageFile string
@@ -181,25 +178,29 @@ func TestRegistry(t *testing.T) {
 		},
 	}
 
-	for _, tc := range tests {
+	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			d, err := testdocker.New()
+			require.NoError(t, err)
+
 			s := fmt.Sprintf("%s/%s", registryURL.Host, tc.imageName)
 			imageRef, err := name.ParseReference(s)
 			require.NoError(t, err)
 
 			// 1. Load a test image from the tar file, tag it and push to the test registry.
-			err = replicateImage(imageRef, tc.imageFile, auth)
+			err = d.ReplicateImage(ctx, tc.imageName, tc.imageFile, config)
 			require.NoError(t, err)
 
 			// 2. Scan it
 			resultFile, err := scan(t, imageRef, baseDir, tc.golden, tc.option)
 
 			if tc.wantErr != "" {
-				require.Error(t, err)
+				require.NotNil(t, err)
 				require.Contains(t, err.Error(), tc.wantErr, err)
 				return
+			} else {
+				require.NoError(t, err)
 			}
-			require.NoError(t, err)
 
 			// 3. Read want and got
 			want := readReport(t, tc.golden)
@@ -210,6 +211,9 @@ func TestRegistry(t *testing.T) {
 			for i := range want.Results {
 				want.Results[i].Target = fmt.Sprintf("%s (alpine 3.10.2)", s)
 			}
+			want.Metadata.RepoDigests = []string{
+				fmt.Sprintf("%s/alpine@sha256:acd3ca9941a85e8ed16515bfc5328e4e2f8c128caa72959a58a127b7801ee01f", registryURL.Host),
+			}
 
 			// 5. Compare want and got
 			assert.Equal(t, want, got)
@@ -219,7 +223,7 @@ func TestRegistry(t *testing.T) {
 
 func scan(t *testing.T, imageRef name.Reference, baseDir, goldenFile string, opt registryOption) (string, error) {
 	// Set up testing DB
-	cacheDir := initDB(t)
+	cacheDir := gunzipDB(t)
 
 	// Setup the output file
 	outputFile := filepath.Join(t.TempDir(), "output.json")
@@ -236,8 +240,7 @@ func scan(t *testing.T, imageRef name.Reference, baseDir, goldenFile string, opt
 	app := commands.NewApp("dev")
 	app.Writer = io.Discard
 
-	osArgs := []string{"trivy", "--cache-dir", cacheDir, "image", "--format", "json", "--skip-update",
-		"--output", outputFile, imageRef.Name()}
+	osArgs := []string{"trivy", "--cache-dir", cacheDir, "--format", "json", "--skip-update", "--output", outputFile, imageRef.Name()}
 
 	// Run Trivy
 	if err := app.Run(osArgs); err != nil {
@@ -312,33 +315,4 @@ func requestRegistryToken(imageRef name.Reference, baseDir string, opt registryO
 	}
 
 	return r.AccessToken, nil
-}
-
-// ReplicateImage tags the given imagePath and pushes it to the given dest registry.
-func replicateImage(imageRef name.Reference, imagePath string, auth authn.Authenticator) error {
-	img, err := tarball.Image(func() (io.ReadCloser, error) {
-		b, err := os.ReadFile(imagePath)
-		if err != nil {
-			return nil, err
-		}
-		gr, err := gzip.NewReader(bytes.NewReader(b))
-		if err != nil {
-			return nil, err
-		}
-		return io.NopCloser(gr), nil
-	}, nil)
-	if err != nil {
-		return err
-	}
-
-	t := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-
-	err = remote.Write(imageRef, img, remote.WithAuth(auth), remote.WithTransport(t))
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

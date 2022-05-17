@@ -1,7 +1,6 @@
 package debian_test
 
 import (
-	"sort"
 	"testing"
 	"time"
 
@@ -32,7 +31,7 @@ func TestScanner_Detect(t *testing.T) {
 	}{
 		{
 			name:     "happy path",
-			fixtures: []string{"testdata/fixtures/debian.yaml", "testdata/fixtures/data-source.yaml"},
+			fixtures: []string{"testdata/fixtures/debian.yaml"},
 			args: args{
 				osVer: "9.1",
 				pkgs: []ftypes.Package{
@@ -57,11 +56,6 @@ func TestScanner_Detect(t *testing.T) {
 					Layer: ftypes.Layer{
 						DiffID: "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
 					},
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.Debian,
-						Name: "Debian Security Tracker",
-						URL:  "https://salsa.debian.org/security-tracker-team/security-tracker",
-					},
 				},
 				{
 					PkgName:          "htpasswd",
@@ -74,17 +68,12 @@ func TestScanner_Detect(t *testing.T) {
 					Layer: ftypes.Layer{
 						DiffID: "sha256:932da51564135c98a49a34a193d6cd363d8fa4184d957fde16c9d8527b3f3b02",
 					},
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.Debian,
-						Name: "Debian Security Tracker",
-						URL:  "https://salsa.debian.org/security-tracker-team/security-tracker",
-					},
 				},
 			},
 		},
 		{
 			name:     "invalid bucket",
-			fixtures: []string{"testdata/fixtures/invalid.yaml", "testdata/fixtures/data-source.yaml"},
+			fixtures: []string{"testdata/fixtures/invalid.yaml"},
 			args: args{
 				osVer: "9.1",
 				pkgs: []ftypes.Package{
@@ -99,7 +88,7 @@ func TestScanner_Detect(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "failed to unmarshal advisory JSON",
+			wantErr: "failed to get Debian OVAL advisories",
 		},
 	}
 	for _, tt := range tests {
@@ -114,10 +103,6 @@ func TestScanner_Detect(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.wantErr)
 				return
 			}
-
-			sort.Slice(got, func(i, j int) bool {
-				return got[i].VulnerabilityID < got[j].VulnerabilityID
-			})
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
 		})

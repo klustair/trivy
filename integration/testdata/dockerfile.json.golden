@@ -40,9 +40,7 @@
             "https://docs.docker.com/develop/develop-images/dockerfile_best-practices/",
             "https://avd.aquasec.com/appshield/ds002"
           ],
-          "Status": "FAIL",
-          "Layer": {},
-          "IacMetadata": {}
+          "Status": "FAIL"
         }
       ]
     }

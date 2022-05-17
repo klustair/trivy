@@ -16,7 +16,7 @@ func TestReportWriter_JSON(t *testing.T) {
 	testCases := []struct {
 		name          string
 		detectedVulns []types.DetectedVulnerability
-		want          types.Report
+		want          report.Report
 	}{
 		{
 			name: "happy path",
@@ -34,11 +34,11 @@ func TestReportWriter_JSON(t *testing.T) {
 					},
 				},
 			},
-			want: types.Report{
+			want: report.Report{
 				SchemaVersion: 2,
 				ArtifactName:  "alpine:3.14",
-				Results: types.Results{
-					types.Result{
+				Results: report.Results{
+					report.Result{
 						Target: "foojson",
 						Vulnerabilities: []types.DetectedVulnerability{
 							{
@@ -66,10 +66,10 @@ func TestReportWriter_JSON(t *testing.T) {
 			jsonWritten := bytes.Buffer{}
 			jw.Output = &jsonWritten
 
-			inputResults := types.Report{
+			inputResults := report.Report{
 				SchemaVersion: 2,
 				ArtifactName:  "alpine:3.14",
-				Results: types.Results{
+				Results: report.Results{
 					{
 						Target:          "foojson",
 						Vulnerabilities: tc.detectedVulns,
@@ -83,7 +83,7 @@ func TestReportWriter_JSON(t *testing.T) {
 			})
 			assert.NoError(t, err)
 
-			var got types.Report
+			var got report.Report
 			err = json.Unmarshal(jsonWritten.Bytes(), &got)
 			assert.NoError(t, err, "invalid json written")
 

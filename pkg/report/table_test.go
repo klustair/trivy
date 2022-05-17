@@ -14,13 +14,14 @@ import (
 func TestReportWriter_Table(t *testing.T) {
 	testCases := []struct {
 		name               string
-		results            types.Results
+		results            report.Results
 		expectedOutput     string
+		light              bool
 		includeNonFailures bool
 	}{
 		{
 			name: "happy path full",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -48,8 +49,35 @@ func TestReportWriter_Table(t *testing.T) {
 `,
 		},
 		{
+			name:  "happy path light",
+			light: true,
+			results: report.Results{
+				{
+					Target: "test",
+					Vulnerabilities: []types.DetectedVulnerability{
+						{
+							VulnerabilityID:  "CVE-2020-0001",
+							PkgName:          "foo",
+							InstalledVersion: "1.2.3",
+							FixedVersion:     "3.4.5",
+							Vulnerability: dbTypes.Vulnerability{
+								Title:    "foobar",
+								Severity: "HIGH",
+							},
+						},
+					},
+				},
+			},
+			expectedOutput: `+---------+------------------+----------+-------------------+---------------+
+| LIBRARY | VULNERABILITY ID | SEVERITY | INSTALLED VERSION | FIXED VERSION |
++---------+------------------+----------+-------------------+---------------+
+| foo     | CVE-2020-0001    | HIGH     | 1.2.3             | 3.4.5         |
++---------+------------------+----------+-------------------+---------------+
+`,
+		},
+		{
 			name: "no title for vuln and missing primary link",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -75,7 +103,7 @@ func TestReportWriter_Table(t *testing.T) {
 		},
 		{
 			name: "long title for vuln",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -104,7 +132,7 @@ func TestReportWriter_Table(t *testing.T) {
 		},
 		{
 			name: "happy path misconfigurations",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Misconfigurations: []types.DetectedMisconfiguration{
@@ -143,7 +171,7 @@ func TestReportWriter_Table(t *testing.T) {
 		{
 			name:               "happy path misconfigurations with successes",
 			includeNonFailures: true,
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Misconfigurations: []types.DetectedMisconfiguration{
@@ -187,9 +215,10 @@ func TestReportWriter_Table(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			tableWritten := bytes.Buffer{}
-			err := report.Write(types.Report{Results: tc.results}, report.Option{
+			err := report.Write(report.Report{Results: tc.results}, report.Option{
 				Format:             "table",
 				Output:             &tableWritten,
+				Light:              tc.light,
 				IncludeNonFailures: tc.includeNonFailures,
 			})
 			assert.NoError(t, err)

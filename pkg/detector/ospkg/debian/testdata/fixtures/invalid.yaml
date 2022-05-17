@@ -1,4 +1,4 @@
-- bucket: debian 9
+- bucket: debian oval 9
   pairs:
     - bucket: apache2
       pairs:

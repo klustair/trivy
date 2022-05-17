@@ -8,21 +8,24 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/google/wire"
 	"github.com/twitchtv/twirp"
 	"golang.org/x/xerrors"
 
 	"github.com/aquasecurity/fanal/cache"
 	"github.com/aquasecurity/trivy-db/pkg/db"
-	"github.com/aquasecurity/trivy-db/pkg/metadata"
 	dbFile "github.com/aquasecurity/trivy/pkg/db"
-	dbc "github.com/aquasecurity/trivy/pkg/db"
 	"github.com/aquasecurity/trivy/pkg/log"
 	"github.com/aquasecurity/trivy/pkg/utils"
 	rpcCache "github.com/aquasecurity/trivy/rpc/cache"
 	rpcScanner "github.com/aquasecurity/trivy/rpc/scanner"
 )
 
-const updateInterval = 1 * time.Hour
+// DBWorkerSuperSet binds the dependencies for Trivy DB worker
+var DBWorkerSuperSet = wire.NewSet(
+	dbFile.SuperSet,
+	newDBWorker,
+)
 
 // Server represents Trivy server
 type Server struct {
@@ -50,10 +53,10 @@ func (s Server) ListenAndServe(serverCache cache.Cache) error {
 	dbUpdateWg := &sync.WaitGroup{}
 
 	go func() {
-		worker := newDBWorker(dbc.NewClient(s.cacheDir, true))
+		worker := initializeDBWorker(s.cacheDir, true)
 		ctx := context.Background()
 		for {
-			time.Sleep(updateInterval)
+			time.Sleep(1 * time.Hour)
 			if err := worker.update(ctx, s.appVersion, s.cacheDir, dbUpdateWg, requestWg); err != nil {
 				log.Logger.Errorf("%+v\n", err)
 			}
@@ -121,7 +124,7 @@ func newDBWorker(dbClient dbFile.Operation) dbWorker {
 func (w dbWorker) update(ctx context.Context, appVersion, cacheDir string,
 	dbUpdateWg, requestWg *sync.WaitGroup) error {
 	log.Logger.Debug("Check for DB update...")
-	needsUpdate, err := w.dbClient.NeedsUpdate(appVersion, false)
+	needsUpdate, err := w.dbClient.NeedsUpdate(appVersion, false, false)
 	if err != nil {
 		return xerrors.Errorf("failed to check if db needs an update")
 	} else if !needsUpdate {
@@ -142,7 +145,7 @@ func (w dbWorker) hotUpdate(ctx context.Context, cacheDir string, dbUpdateWg, re
 	}
 	defer os.RemoveAll(tmpDir)
 
-	if err = w.dbClient.Download(ctx, tmpDir); err != nil {
+	if err = w.dbClient.Download(ctx, tmpDir, false); err != nil {
 		return xerrors.Errorf("failed to download vulnerability DB: %w", err)
 	}
 
@@ -157,14 +160,12 @@ func (w dbWorker) hotUpdate(ctx context.Context, cacheDir string, dbUpdateWg, re
 		return xerrors.Errorf("failed to close DB: %w", err)
 	}
 
-	// Copy trivy.db
 	if _, err = utils.CopyFile(db.Path(tmpDir), db.Path(cacheDir)); err != nil {
 		return xerrors.Errorf("failed to copy the database file: %w", err)
 	}
 
-	// Copy metadata.json
-	if _, err = utils.CopyFile(metadata.Path(tmpDir), metadata.Path(cacheDir)); err != nil {
-		return xerrors.Errorf("failed to copy the metadata file: %w", err)
+	if err = w.dbClient.UpdateMetadata(cacheDir); err != nil {
+		return xerrors.Errorf("unable to update database metadata: %w", err)
 	}
 
 	log.Logger.Info("Reopening DB...")

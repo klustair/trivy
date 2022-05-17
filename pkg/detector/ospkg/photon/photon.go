@@ -1,11 +1,8 @@
 package photon
 
 import (
-	"time"
-
 	version "github.com/knqyf263/go-rpm-version"
 	"golang.org/x/xerrors"
-	"k8s.io/utils/clock"
 
 	ftypes "github.com/aquasecurity/fanal/types"
 	"github.com/aquasecurity/trivy-db/pkg/vulnsrc/photon"
@@ -14,47 +11,20 @@ import (
 	"github.com/aquasecurity/trivy/pkg/types"
 )
 
-var (
-	eolDates = map[string]time.Time{
-		"1.0": time.Date(2022, 2, 28, 23, 59, 59, 0, time.UTC),
-		"2.0": time.Date(2022, 12, 31, 23, 59, 59, 0, time.UTC),
-		// The following versions don't have the EOL dates yet.
-		// See https://blogs.vmware.com/vsphere/2022/01/photon-1-x-end-of-support-announcement.html
-		"3.0": time.Date(2024, 6, 30, 23, 59, 59, 0, time.UTC),
-		"4.0": time.Date(2025, 12, 31, 23, 59, 59, 0, time.UTC),
-	}
-)
-
-type options struct {
-	clock clock.Clock
-}
-
-type option func(*options)
-
-func WithClock(clock clock.Clock) option {
-	return func(opts *options) {
-		opts.clock = clock
-	}
-}
+// EOL can't be found for photon https://github.com/vmware/photon/issues/1031
+//var (
+//	eolDates = map[string]time.Time{}
+//)
 
 // Scanner implements the Photon scanner
 type Scanner struct {
 	vs photon.VulnSrc
-	*options
 }
 
 // NewScanner is the factory method for Scanner
-func NewScanner(opts ...option) *Scanner {
-	o := &options{
-		clock: clock.RealClock{},
-	}
-
-	for _, opt := range opts {
-		opt(o)
-	}
+func NewScanner() *Scanner {
 	return &Scanner{
-		vs:      photon.NewVulnSrc(),
-		options: o,
+		vs: photon.NewVulnSrc(),
 	}
 }
 
@@ -81,7 +51,6 @@ func (s *Scanner) Detect(osVer string, pkgs []ftypes.Package) ([]types.DetectedV
 				InstalledVersion: installed,
 				Layer:            pkg.Layer,
 				Custom:           adv.Custom,
-				DataSource:       adv.DataSource,
 			}
 			if installedVersion.LessThan(fixedVersion) {
 				vuln.FixedVersion = adv.FixedVersion
@@ -92,12 +61,7 @@ func (s *Scanner) Detect(osVer string, pkgs []ftypes.Package) ([]types.DetectedV
 	return vulns, nil
 }
 
-// IsSupportedVersion checks if the OS version reached end-of-support.
-func (s *Scanner) IsSupportedVersion(osFamily, osVer string) bool {
-	eol, ok := eolDates[osVer]
-	if !ok {
-		log.Logger.Warnf("This OS version is not on the EOL list: %s %s", osFamily, osVer)
-		return false
-	}
-	return s.clock.Now().Before(eol)
+// IsSupportedVersion checks is OSFamily can be scanned
+func (s *Scanner) IsSupportedVersion(_, _ string) bool {
+	return true
 }

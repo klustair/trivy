@@ -6,6 +6,8 @@ import (
 	fanaltypes "github.com/aquasecurity/fanal/types"
 	mock "github.com/stretchr/testify/mock"
 
+	report "github.com/aquasecurity/trivy/pkg/report"
+
 	types "github.com/aquasecurity/trivy/pkg/types"
 )
 
@@ -26,7 +28,7 @@ type DriverScanArgs struct {
 }
 
 type DriverScanReturns struct {
-	Results types.Results
+	Results report.Results
 	OsFound *fanaltypes.OS
 	Err     error
 }
@@ -68,15 +70,15 @@ func (_m *MockDriver) ApplyScanExpectations(expectations []DriverScanExpectation
 }
 
 // Scan provides a mock function with given fields: target, imageID, layerIDs, options
-func (_m *MockDriver) Scan(target string, artifactKey string, blobKeys []string, options types.ScanOptions) (types.Results, *fanaltypes.OS, error) {
+func (_m *MockDriver) Scan(target string, artifactKey string, blobKeys []string, options types.ScanOptions) (report.Results, *fanaltypes.OS, error) {
 	ret := _m.Called(target, artifactKey, blobKeys, options)
 
-	var r0 types.Results
-	if rf, ok := ret.Get(0).(func(string, string, []string, types.ScanOptions) types.Results); ok {
+	var r0 report.Results
+	if rf, ok := ret.Get(0).(func(string, string, []string, types.ScanOptions) report.Results); ok {
 		r0 = rf(target, artifactKey, blobKeys, options)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(types.Results)
+			r0 = ret.Get(0).(report.Results)
 		}
 	}
 

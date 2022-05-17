@@ -5,18 +5,19 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
 
 func TestResults_Failed(t *testing.T) {
 	tests := []struct {
 		name    string
-		results types.Results
+		results report.Results
 		want    bool
 	}{
 		{
 			name: "no vulnerabilities and misconfigurations",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Type:   "test",
@@ -26,7 +27,7 @@ func TestResults_Failed(t *testing.T) {
 		},
 		{
 			name: "vulnerabilities found",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Type:   "test",
@@ -42,7 +43,7 @@ func TestResults_Failed(t *testing.T) {
 		},
 		{
 			name: "failed misconfigurations",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Type:   "test",
@@ -59,7 +60,7 @@ func TestResults_Failed(t *testing.T) {
 		},
 		{
 			name: "passed misconfigurations",
-			results: types.Results{
+			results: report.Results{
 				{
 					Target: "test",
 					Type:   "test",

@@ -8,11 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aquasecurity/fanal/analyzer"
-	fos "github.com/aquasecurity/fanal/analyzer/os"
 	ftypes "github.com/aquasecurity/fanal/types"
 	"github.com/aquasecurity/trivy-db/pkg/db"
+	"github.com/aquasecurity/trivy-db/pkg/vulnsrc/vulnerability"
 	"github.com/aquasecurity/trivy/pkg/dbtest"
 	ospkgDetector "github.com/aquasecurity/trivy/pkg/detector/ospkg"
+	"github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
 
@@ -28,7 +29,7 @@ func TestScanner_Scan(t *testing.T) {
 		fixtures                []string
 		applyLayersExpectation  ApplierApplyLayersExpectation
 		ospkgDetectExpectations []OspkgDetectorDetectExpectation
-		wantResults             types.Results
+		wantResults             report.Results
 		wantOS                  *ftypes.OS
 		wantErr                 string
 	}{
@@ -50,7 +51,7 @@ func TestScanner_Scan(t *testing.T) {
 				Returns: ApplierApplyLayersReturns{
 					Detail: ftypes.ArtifactDetail{
 						OS: &ftypes.OS{
-							Family: fos.Alpine,
+							Family: "alpine",
 							Name:   "3.11",
 						},
 						Packages: []ftypes.Package{
@@ -111,7 +112,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "alpine:latest (alpine 3.11)",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -125,8 +126,8 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassOSPkg,
-					Type:  fos.Alpine,
+					Class: report.ClassOSPkg,
+					Type:  vulnerability.Alpine,
 				},
 				{
 					Target: "/app/Gemfile.lock",
@@ -141,7 +142,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  ftypes.Bundler,
 				},
 			},
@@ -245,7 +246,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "alpine:latest (alpine 3.11)",
 					Packages: []ftypes.Package{
@@ -275,8 +276,8 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassOSPkg,
-					Type:  fos.Alpine,
+					Class: report.ClassOSPkg,
+					Type:  vulnerability.Alpine,
 				},
 				{
 					Target: "/app/Gemfile.lock",
@@ -300,7 +301,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  ftypes.Bundler,
 				},
 			},
@@ -345,7 +346,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "/app/Gemfile.lock",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -359,7 +360,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  "bundler",
 				},
 			},
@@ -416,11 +417,11 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "alpine:latest (alpine 3.11)",
-					Class:  types.ClassOSPkg,
-					Type:   fos.Alpine,
+					Class:  report.ClassOSPkg,
+					Type:   vulnerability.Alpine,
 				},
 				{
 					Target: "/app/Gemfile.lock",
@@ -435,7 +436,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  "bundler",
 				},
 			},
@@ -494,7 +495,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "/app/Gemfile.lock",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -508,7 +509,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  ftypes.Bundler,
 				},
 			},
@@ -597,7 +598,7 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "/app/Gemfile.lock",
 					Vulnerabilities: []types.DetectedVulnerability{
@@ -611,7 +612,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  ftypes.Bundler,
 				},
 				{
@@ -627,7 +628,7 @@ func TestScanner_Scan(t *testing.T) {
 							},
 						},
 					},
-					Class: types.ClassLangPkg,
+					Class: report.ClassLangPkg,
 					Type:  ftypes.Composer,
 				},
 			},
@@ -716,10 +717,10 @@ func TestScanner_Scan(t *testing.T) {
 					},
 				},
 			},
-			wantResults: types.Results{
+			wantResults: report.Results{
 				{
 					Target: "/app/configs/deployment.yaml",
-					Class:  types.ClassConfig,
+					Class:  report.ClassConfig,
 					Type:   ftypes.Kubernetes,
 					Misconfigurations: []types.DetectedMisconfiguration{
 						{
@@ -754,7 +755,7 @@ func TestScanner_Scan(t *testing.T) {
 				},
 				{
 					Target: "/app/configs/pod.yaml",
-					Class:  types.ClassConfig,
+					Class:  report.ClassConfig,
 					Type:   ftypes.Kubernetes,
 					Misconfigurations: []types.DetectedMisconfiguration{
 						{
@@ -930,9 +931,10 @@ func TestScanner_Scan(t *testing.T) {
 				require.NotNil(t, err, tt.name)
 				require.Contains(t, err.Error(), tt.wantErr, tt.name)
 				return
+			} else {
+				require.NoError(t, err, tt.name)
 			}
 
-			require.NoError(t, err, tt.name)
 			assert.Equal(t, tt.wantResults, gotResults)
 			assert.Equal(t, tt.wantOS, gotOS)
 

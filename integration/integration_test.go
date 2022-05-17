@@ -4,9 +4,11 @@
 package integration
 
 import (
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,43 +19,44 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/aquasecurity/trivy-db/pkg/db"
-	"github.com/aquasecurity/trivy-db/pkg/metadata"
-	"github.com/aquasecurity/trivy/pkg/dbtest"
-	"github.com/aquasecurity/trivy/pkg/types"
+	"github.com/aquasecurity/trivy/pkg/report"
 )
 
 var update = flag.Bool("update", false, "update golden files")
 
-func initDB(t *testing.T) string {
-	fixtureDir := filepath.Join("testdata", "fixtures", "db")
-	entries, err := os.ReadDir(fixtureDir)
+func gunzipDB(t *testing.T) string {
+	gz, err := os.Open("testdata/trivy.db.gz")
 	require.NoError(t, err)
 
-	var fixtures []string
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		fixtures = append(fixtures, filepath.Join(fixtureDir, entry.Name()))
-	}
+	zr, err := gzip.NewReader(gz)
+	require.NoError(t, err)
 
-	cacheDir := dbtest.InitDB(t, fixtures)
-	defer db.Close()
+	tmpDir := t.TempDir()
+	dbPath := db.Path(tmpDir)
+	dbDir := filepath.Dir(dbPath)
+	err = os.MkdirAll(dbDir, 0700)
+	require.NoError(t, err)
 
-	dbDir := filepath.Dir(db.Path(cacheDir))
+	file, err := os.Create(dbPath)
+	require.NoError(t, err)
+	defer file.Close()
+
+	_, err = io.Copy(file, zr)
+	require.NoError(t, err)
 
 	metadataFile := filepath.Join(dbDir, "metadata.json")
-	f, err := os.Create(metadataFile)
-	require.NoError(t, err)
-
-	err = json.NewEncoder(f).Encode(metadata.Metadata{
-		Version:    db.SchemaVersion,
-		NextUpdate: time.Now().Add(24 * time.Hour),
-		UpdatedAt:  time.Now(),
+	b, err := json.Marshal(db.Metadata{
+		Version:    1,
+		Type:       1,
+		NextUpdate: time.Time{},
+		UpdatedAt:  time.Time{},
 	})
 	require.NoError(t, err)
 
-	return cacheDir
+	err = os.WriteFile(metadataFile, b, 0600)
+	require.NoError(t, err)
+
+	return tmpDir
 }
 
 func getFreePort() (int, error) {
@@ -85,14 +88,14 @@ func waitPort(ctx context.Context, addr string) error {
 	}
 }
 
-func readReport(t *testing.T, filePath string) types.Report {
+func readReport(t *testing.T, filePath string) report.Report {
 	t.Helper()
 
 	f, err := os.Open(filePath)
 	require.NoError(t, err, filePath)
 	defer f.Close()
 
-	var res types.Report
+	var res report.Report
 	err = json.NewDecoder(f).Decode(&res)
 	require.NoError(t, err, filePath)
 
@@ -101,8 +104,6 @@ func readReport(t *testing.T, filePath string) types.Report {
 
 	// We don't compare repo tags because the archive doesn't support it
 	res.Metadata.RepoTags = nil
-
-	res.Metadata.RepoDigests = nil
 
 	return res
 }

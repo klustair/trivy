@@ -1,7 +1,6 @@
 package option
 
 import (
-	"io"
 	"os"
 	"strings"
 
@@ -33,9 +32,8 @@ type ReportOption struct {
 	// these variables are populated by Init()
 	VulnType       []string
 	SecurityChecks []string
-	Output         io.Writer
+	Output         *os.File
 	Severities     []dbTypes.Severity
-	ListAllPkgs    bool
 }
 
 // NewReportOption is the factory method to return ReportOption
@@ -52,41 +50,31 @@ func NewReportOption(c *cli.Context) ReportOption {
 		IgnoreFile:     c.String("ignorefile"),
 		IgnoreUnfixed:  c.Bool("ignore-unfixed"),
 		ExitCode:       c.Int("exit-code"),
-		ListAllPkgs:    c.Bool("list-all-pkgs"),
 	}
 }
 
 // Init initializes the ReportOption
-func (c *ReportOption) Init(output io.Writer, logger *zap.SugaredLogger) error {
+func (c *ReportOption) Init(logger *zap.SugaredLogger) error {
+	var err error
+
 	if c.Template != "" {
 		if c.Format == "" {
-			logger.Warn("'--template' is ignored because '--format template' is not specified. Use '--template' option with '--format template' option.")
+			logger.Warn("--template is ignored because --format template is not specified. Use --template option with --format template option.")
 		} else if c.Format != "template" {
-			logger.Warnf("'--template' is ignored because '--format %s' is specified. Use '--template' option with '--format template' option.", c.Format)
-		}
-	} else {
-		if c.Format == "template" {
-			logger.Warn("'--format template' is ignored because '--template' is not specified. Specify '--template' option when you use '--format template'.")
+			logger.Warnf("--template is ignored because --format %s is specified. Use --template option with --format template option.", c.Format)
 		}
 	}
-
-	// "--list-all-pkgs" option is unavailable with "--format table".
-	// If user specifies "--list-all-pkgs" with "--format table", we should warn it.
-	if c.ListAllPkgs && c.Format == "table" {
-		logger.Warn(`"--list-all-pkgs" cannot be used with "--format table". Try "--format json" or other formats.`)
-	}
-
-	if c.forceListAllPkgs(logger) {
-		c.ListAllPkgs = true
+	if c.Format == "template" && c.Template == "" {
+		logger.Warn("--format template is ignored because --template not is specified. Specify --template option when you use --format template.")
 	}
 
 	c.Severities = splitSeverity(logger, c.severities)
 
-	if err := c.populateVulnTypes(); err != nil {
+	if err = c.populateVulnTypes(); err != nil {
 		return xerrors.Errorf("vuln type: %w", err)
 	}
 
-	if err := c.populateSecurityChecks(); err != nil {
+	if err = c.populateSecurityChecks(); err != nil {
 		return xerrors.Errorf("security checks: %w", err)
 	}
 
@@ -95,24 +83,17 @@ func (c *ReportOption) Init(output io.Writer, logger *zap.SugaredLogger) error {
 	c.vulnType = ""
 	c.securityChecks = ""
 
-	// The output is os.Stdout by default
+	c.Output = os.Stdout
 	if c.output != "" {
-		var err error
-		if output, err = os.Create(c.output); err != nil {
+		if c.Output, err = os.Create(c.output); err != nil {
 			return xerrors.Errorf("failed to create an output file: %w", err)
 		}
 	}
-
-	c.Output = output
 
 	return nil
 }
 
 func (c *ReportOption) populateVulnTypes() error {
-	if c.vulnType == "" {
-		return nil
-	}
-
 	for _, v := range strings.Split(c.vulnType, ",") {
 		if types.NewVulnType(v) == types.VulnTypeUnknown {
 			return xerrors.Errorf("unknown vulnerability type (%s)", v)
@@ -123,10 +104,6 @@ func (c *ReportOption) populateVulnTypes() error {
 }
 
 func (c *ReportOption) populateSecurityChecks() error {
-	if c.securityChecks == "" {
-		return nil
-	}
-
 	for _, v := range strings.Split(c.securityChecks, ",") {
 		if types.NewSecurityCheck(v) == types.SecurityCheckUnknown {
 			return xerrors.Errorf("unknown security check (%s)", v)
@@ -134,14 +111,6 @@ func (c *ReportOption) populateSecurityChecks() error {
 		c.SecurityChecks = append(c.SecurityChecks, v)
 	}
 	return nil
-}
-
-func (c *ReportOption) forceListAllPkgs(logger *zap.SugaredLogger) bool {
-	if c.Format == "cyclonedx" && !c.ListAllPkgs {
-		logger.Debugf("'--format cyclonedx' automatically enables '--list-all-pkgs'.")
-		return true
-	}
-	return false
 }
 
 func splitSeverity(logger *zap.SugaredLogger, severity string) []dbTypes.Severity {

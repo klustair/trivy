@@ -112,7 +112,6 @@ func (s *Scanner) Detect(osVer string, pkgs []ftypes.Package) ([]types.DetectedV
 				FixedVersion:     adv.FixedVersion,
 				Layer:            pkg.Layer,
 				Custom:           adv.Custom,
-				DataSource:       adv.DataSource,
 			})
 		}
 	}

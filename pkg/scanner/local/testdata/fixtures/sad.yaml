@@ -1,4 +1,4 @@
-- bucket: "rubygems::uby-advisory-db"
+- bucket: "ruby-advisory-db"
   pairs:
     - bucket: rails
       pairs:

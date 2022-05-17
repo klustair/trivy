@@ -1,24 +1,24 @@
 # Air-Gapped Environment
 
-Trivy can be used in air-gapped environments. Note that an allowlist is [here][allowlist].
+Trivy can be used in air-gapped environments.
+
 
 ## Air-Gapped Environment for vulnerabilities
 
 ### Download the vulnerability database
 At first, you need to download the vulnerability database for use in air-gapped environments.
-Please follow [oras installation instruction][oras].
-
-Download `db.tar.gz`:
+Go to [trivy-db][trivy-db] and download `trivy-offline.db.tgz` in the latest release.
+If you download `trivy-light-offline.db.tgz`, you have to run Trivy with `--light` option.
 
 ```
-$ oras pull ghcr.io/aquasecurity/trivy-db:2 -a
+$ wget https://github.com/aquasecurity/trivy-db/releases/latest/download/trivy-offline.db.tgz
 ```
 
 ### Transfer the DB file into the air-gapped environment
 The way of transfer depends on the environment.
 
 ```
-$ rsync -av -e ssh /path/to/db.tar.gz [user]@[host]:dst
+$ rsync -av -e ssh /path/to/trivy-offline.db.tgz [user]@[host]:dst
 ```
 
 ### Put the DB file in Trivy's cache directory
@@ -35,10 +35,17 @@ Put the DB file in the cache directory + `/db`.
 ```
 $ mkdir -p /home/myuser/.cache/trivy/db
 $ cd /home/myuser/.cache/trivy/db
-$ tar xvf /path/to/db.tar.gz -C /home/myuser/.cache/trivy/db
+$ mv /path/to/trivy-offline.db.tgz .
+```
+
+Then, decompress it.
+`trivy-offline.db.tgz` file includes two files, `trivy.db` and `metadata.json`.
+
+```
+$ tar xvf trivy-offline.db.tgz
 x trivy.db
 x metadata.json
-$ rm /path/to/db.tar.gz
+$ rm trivy-offline.db.tgz
 ```
 
 In an air-gapped environment it is your responsibility to update the Trivy database on a regular basis, so that the scanner can detect recently-identified vulnerabilities. 
@@ -55,8 +62,7 @@ $ trivy image --skip-update --offline-scan alpine:3.12
 
 ### Download misconfiguration policies
 At first, you need to download misconfiguration policies for use in air-gapped environments.
-Please follow [oras installation instruction][oras].
-
+Please follow [oras installation instruction][oras]. \
 Download `bundle.tar.gz`:
 
 ```
@@ -109,5 +115,5 @@ In an air-gapped environment, specify `--skip-policy-update` so that Trivy doesn
 $ trivy conf --skip-policy-update /path/to/conf
 ```
 
-[allowlist]: ../getting-started/troubleshooting.md
+[trivy-db]: https://github.com/aquasecurity/trivy-db/releases
 [oras]: https://oras.land/cli/

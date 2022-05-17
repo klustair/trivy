@@ -22,7 +22,6 @@ func TestFilesystem(t *testing.T) {
 		ignoreIDs      []string
 		policyPaths    []string
 		namespaces     []string
-		listAllPkgs    bool
 		input          string
 	}
 	tests := []struct {
@@ -42,18 +41,9 @@ func TestFilesystem(t *testing.T) {
 			name: "pip",
 			args: args{
 				securityChecks: "vuln",
-				listAllPkgs:    true,
 				input:          "testdata/fixtures/fs/pip",
 			},
 			golden: "testdata/pip.json.golden",
-		},
-		{
-			name: "pom",
-			args: args{
-				securityChecks: "vuln",
-				input:          "testdata/fixtures/fs/pom",
-			},
-			golden: "testdata/pom.json.golden",
 		},
 		{
 			name: "dockerfile",
@@ -95,12 +85,12 @@ func TestFilesystem(t *testing.T) {
 	}
 
 	// Set up testing DB
-	cacheDir := initDB(t)
+	cacheDir := gunzipDB(t)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			osArgs := []string{"trivy", "--cache-dir", cacheDir, "fs", "--skip-db-update", "--skip-policy-update",
-				"--format", "json", "--offline-scan", "--security-checks", tt.args.securityChecks}
+				"--format", "json", "--security-checks", tt.args.securityChecks}
 
 			if len(tt.args.policyPaths) != 0 {
 				for _, policyPath := range tt.args.policyPaths {
@@ -115,7 +105,9 @@ func TestFilesystem(t *testing.T) {
 			}
 
 			if len(tt.args.severity) != 0 {
-				osArgs = append(osArgs, "--severity", strings.Join(tt.args.severity, ","))
+				osArgs = append(osArgs,
+					[]string{"--severity", strings.Join(tt.args.severity, ",")}...,
+				)
 			}
 
 			if len(tt.args.ignoreIDs) != 0 {
@@ -131,10 +123,6 @@ func TestFilesystem(t *testing.T) {
 				outputFile = tt.golden
 			}
 
-			if tt.args.listAllPkgs {
-				osArgs = append(osArgs, "--list-all-pkgs")
-			}
-
 			osArgs = append(osArgs, "--output", outputFile)
 			osArgs = append(osArgs, tt.args.input)
 
@@ -146,7 +134,10 @@ func TestFilesystem(t *testing.T) {
 			assert.Nil(t, app.Run(osArgs))
 
 			// Compare want and got
-			compareReports(t, tt.golden, outputFile)
+			want := readReport(t, tt.golden)
+			got := readReport(t, outputFile)
+
+			assert.Equal(t, want, got)
 		})
 	}
 }

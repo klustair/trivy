@@ -7,13 +7,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	fos "github.com/aquasecurity/fanal/analyzer/os"
 	ftypes "github.com/aquasecurity/fanal/types"
 	"github.com/aquasecurity/trivy-db/pkg/db"
 	dbTypes "github.com/aquasecurity/trivy-db/pkg/types"
 	"github.com/aquasecurity/trivy-db/pkg/utils"
 	"github.com/aquasecurity/trivy-db/pkg/vulnsrc/vulnerability"
 	"github.com/aquasecurity/trivy/pkg/dbtest"
+	"github.com/aquasecurity/trivy/pkg/report"
 	"github.com/aquasecurity/trivy/pkg/types"
 )
 
@@ -30,12 +30,12 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 	}{
 		{
 			name:     "happy path, with only OS vulnerability but no vendor severity, no NVD",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
 					{VulnerabilityID: "CVE-2019-0001"},
 				},
-				reportType: fos.RedHat,
+				reportType: vulnerability.RedHat,
 			},
 			expectedVulnerabilities: []types.DetectedVulnerability{
 				{
@@ -54,19 +54,12 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 		},
 		{
 			name:     "happy path, with only OS vulnerability but no vendor severity, yes NVD",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
-					{
-						VulnerabilityID: "CVE-2019-0002",
-						DataSource: &dbTypes.DataSource{
-							ID:   vulnerability.Ubuntu,
-							Name: "Ubuntu CVE Tracker",
-							URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
-						},
-					},
+					{VulnerabilityID: "CVE-2019-0002"},
 				},
-				reportType: fos.Ubuntu,
+				reportType: vulnerability.Ubuntu,
 			},
 			expectedVulnerabilities: []types.DetectedVulnerability{
 				{
@@ -81,29 +74,17 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 					},
 					SeveritySource: vulnerability.NVD,
 					PrimaryURL:     "https://avd.aquasec.com/nvd/cve-2019-0002",
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.Ubuntu,
-						Name: "Ubuntu CVE Tracker",
-						URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
-					},
 				},
 			},
 		},
 		{
 			name:     "happy path, with only OS vulnerability but no severity, no vendor severity, no NVD",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
-					{
-						VulnerabilityID: "CVE-2019-0003",
-						DataSource: &dbTypes.DataSource{
-							ID:   vulnerability.Ubuntu,
-							Name: "Ubuntu CVE Tracker",
-							URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
-						},
-					},
+					{VulnerabilityID: "CVE-2019-0003"},
 				},
-				reportType: fos.Ubuntu,
+				reportType: vulnerability.Ubuntu,
 			},
 			expectedVulnerabilities: []types.DetectedVulnerability{
 				{
@@ -115,29 +96,17 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 						References:  []string{"http://example.com"},
 					},
 					PrimaryURL: "https://avd.aquasec.com/nvd/cve-2019-0003",
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.Ubuntu,
-						Name: "Ubuntu CVE Tracker",
-						URL:  "https://git.launchpad.net/ubuntu-cve-tracker",
-					},
 				},
 			},
 		},
 		{
 			name:     "happy path, with only OS vulnerability, yes vendor severity, with both NVD and CVSS info",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
-					{
-						VulnerabilityID: "CVE-2019-0004",
-						DataSource: &dbTypes.DataSource{
-							ID:   vulnerability.RedHat,
-							Name: "Red Hat OVAL v2",
-							URL:  "https://www.redhat.com/security/data/oval/v2/",
-						},
-					},
+					{VulnerabilityID: "CVE-2019-0004"},
 				},
-				reportType: fos.CentOS,
+				reportType: vulnerability.CentOS,
 			},
 			expectedVulnerabilities: []types.DetectedVulnerability{
 				{
@@ -148,7 +117,7 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 						Severity:    dbTypes.SeverityLow.String(),
 						CweIDs:      []string{"CWE-311"},
 						References:  []string{"http://example.com"},
-						CVSS: map[dbTypes.SourceID]dbTypes.CVSS{
+						CVSS: map[string]dbTypes.CVSS{
 							vulnerability.NVD: {
 								V2Vector: "AV:N/AC:L/Au:N/C:P/I:P/A:P",
 								V2Score:  4.5,
@@ -165,27 +134,56 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 					},
 					SeveritySource: vulnerability.RedHat,
 					PrimaryURL:     "https://avd.aquasec.com/nvd/cve-2019-0004",
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.RedHat,
-						Name: "Red Hat OVAL v2",
-						URL:  "https://www.redhat.com/security/data/oval/v2/",
+				},
+			},
+		},
+		{
+			name:     "happy path light db, with only OS vulnerability, yes vendor severity",
+			fixtures: []string{"testdata/fixtures/light.yaml"},
+			args: args{
+				vulns: []types.DetectedVulnerability{
+					{VulnerabilityID: "CVE-2020-0001"},
+				},
+				reportType: vulnerability.Ubuntu,
+			},
+			expectedVulnerabilities: []types.DetectedVulnerability{
+				{
+					VulnerabilityID: "CVE-2020-0001",
+					Vulnerability: dbTypes.Vulnerability{
+						Title:    "dos",
+						Severity: dbTypes.SeverityLow.String(),
 					},
+					SeveritySource: vulnerability.Ubuntu,
+					PrimaryURL:     "https://avd.aquasec.com/nvd/cve-2020-0001",
+				},
+			},
+		},
+		{
+			name:     "happy path light db, with only OS vulnerability, no vendor severity",
+			fixtures: []string{"testdata/fixtures/light.yaml"},
+			args: args{
+				vulns: []types.DetectedVulnerability{
+					{VulnerabilityID: "CVE-2020-0002"},
+				},
+				reportType: vulnerability.Alpine,
+			},
+			expectedVulnerabilities: []types.DetectedVulnerability{
+				{
+					VulnerabilityID: "CVE-2020-0002",
+					Vulnerability: dbTypes.Vulnerability{
+						Title:    "dos",
+						Severity: dbTypes.SeverityUnknown.String(),
+					},
+					PrimaryURL: "https://avd.aquasec.com/nvd/cve-2020-0002",
 				},
 			},
 		},
 		{
 			name:     "happy path, with only library vulnerability",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
-					{
-						VulnerabilityID: "CVE-2019-0005",
-						DataSource: &dbTypes.DataSource{
-							ID:   vulnerability.GHSA,
-							Name: "GitHub Security Advisory Pip",
-							URL:  "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Apip",
-						},
-					},
+					{VulnerabilityID: "CVE-2019-0005"},
 				},
 				reportType: ftypes.Poetry,
 			},
@@ -198,19 +196,14 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 						Severity:    dbTypes.SeverityCritical.String(),
 						References:  []string{"https://www.who.int/emergencies/diseases/novel-coronavirus-2019"},
 					},
-					SeveritySource: vulnerability.GHSA,
+					SeveritySource: vulnerability.PythonSafetyDB,
 					PrimaryURL:     "https://avd.aquasec.com/nvd/cve-2019-0005",
-					DataSource: &dbTypes.DataSource{
-						ID:   vulnerability.GHSA,
-						Name: "GitHub Security Advisory Pip",
-						URL:  "https://github.com/advisories?query=type%3Areviewed+ecosystem%3Apip",
-					},
 				},
 			},
 		},
 		{
 			name:     "happy path, with package-specific severity",
-			fixtures: []string{"testdata/fixtures/vulnerability.yaml"},
+			fixtures: []string{"testdata/fixtures/full.yaml"},
 			args: args{
 				vulns: []types.DetectedVulnerability{
 					{
@@ -221,7 +214,7 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 						},
 					},
 				},
-				reportType: fos.Debian,
+				reportType: vulnerability.Debian,
 			},
 			expectedVulnerabilities: []types.DetectedVulnerability{
 				{
@@ -270,9 +263,9 @@ func TestClient_FillVulnerabilityInfo(t *testing.T) {
 
 func TestClient_getPrimaryURL(t *testing.T) {
 	type args struct {
-		vulnID string
-		refs   []string
-		source dbTypes.SourceID
+		vulnID  string
+		refs    []string
+		sources []string
 	}
 	tests := []struct {
 		name string
@@ -282,36 +275,36 @@ func TestClient_getPrimaryURL(t *testing.T) {
 		{
 			name: "CVE-ID",
 			args: args{
-				vulnID: "CVE-2014-8484",
-				refs:   []string{"http://linux.oracle.com/cve/CVE-2014-8484.html"},
-				source: vulnerability.OracleOVAL,
+				vulnID:  "CVE-2014-8484",
+				refs:    []string{"http://linux.oracle.com/cve/CVE-2014-8484.html"},
+				sources: []string{vulnerability.OracleOVAL},
 			},
 			want: "https://avd.aquasec.com/nvd/cve-2014-8484",
 		},
 		{
 			name: "RUSTSEC",
 			args: args{
-				vulnID: "RUSTSEC-2018-0017",
-				refs:   []string{"https://github.com/rust-lang-deprecated/tempdir/pull/46"},
-				source: vulnerability.OSV,
+				vulnID:  "RUSTSEC-2018-0017",
+				refs:    []string{"https://github.com/rust-lang-deprecated/tempdir/pull/46"},
+				sources: []string{vulnerability.RustSec},
 			},
-			want: "https://osv.dev/vulnerability/RUSTSEC-2018-0017",
+			want: "https://rustsec.org/advisories/RUSTSEC-2018-0017",
 		},
 		{
 			name: "GHSA",
 			args: args{
-				vulnID: "GHSA-28fw-88hq-6jmm",
-				refs:   []string{},
-				source: vulnerability.PhpSecurityAdvisories,
+				vulnID:  "GHSA-28fw-88hq-6jmm",
+				refs:    []string{},
+				sources: []string{vulnerability.PhpSecurityAdvisories},
 			},
 			want: "https://github.com/advisories/GHSA-28fw-88hq-6jmm",
 		},
 		{
 			name: "Debian temp vulnerability",
 			args: args{
-				vulnID: "TEMP-0841856-B18BAF",
-				refs:   []string{},
-				source: vulnerability.Debian,
+				vulnID:  "TEMP-0841856-B18BAF",
+				refs:    []string{},
+				sources: []string{vulnerability.DebianOVAL},
 			},
 			want: "https://security-tracker.debian.org/tracker/TEMP-0841856-B18BAF",
 		},
@@ -324,7 +317,7 @@ func TestClient_getPrimaryURL(t *testing.T) {
 					"https://github.com/lodash/lodash/pull/4759",
 					"https://www.npmjs.com/advisories/1523",
 				},
-				source: vulnerability.NodejsSecurityWg,
+				sources: []string{vulnerability.NodejsSecurityWg},
 			},
 			want: "https://www.npmjs.com/advisories/1523",
 		},
@@ -336,7 +329,7 @@ func TestClient_getPrimaryURL(t *testing.T) {
 					"http://lists.opensuse.org/opensuse-security-announce/2019-11/msg00076.html",
 					"https://www.suse.com/support/security/rating/",
 				},
-				source: vulnerability.SuseCVRF,
+				sources: []string{vulnerability.OpenSuseCVRF},
 			},
 			want: "http://lists.opensuse.org/opensuse-security-announce/2019-11/msg00076.html",
 		},
@@ -344,7 +337,7 @@ func TestClient_getPrimaryURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := Client{}
-			got := c.getPrimaryURL(tt.args.vulnID, tt.args.refs, tt.args.source)
+			got := c.getPrimaryURL(tt.args.vulnID, tt.args.refs, tt.args.sources)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -363,7 +356,7 @@ func TestClient_Filter(t *testing.T) {
 		name               string
 		args               args
 		wantVulns          []types.DetectedVulnerability
-		wantMisconfSummary *types.MisconfSummary
+		wantMisconfSummary *report.MisconfSummary
 		wantMisconfs       []types.DetectedMisconfiguration
 	}{
 		{
@@ -475,7 +468,7 @@ func TestClient_Filter(t *testing.T) {
 					},
 				},
 			},
-			wantMisconfSummary: &types.MisconfSummary{
+			wantMisconfSummary: &report.MisconfSummary{
 				Successes:  0,
 				Failures:   1,
 				Exceptions: 0,
@@ -517,7 +510,6 @@ func TestClient_Filter(t *testing.T) {
 				severities:    []dbTypes.Severity{dbTypes.SeverityHigh},
 				ignoreUnfixed: true,
 			},
-			wantVulns: []types.DetectedVulnerability{},
 		},
 		{
 			name: "happy path with ignore-file",

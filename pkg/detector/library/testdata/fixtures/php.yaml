@@ -1,4 +1,4 @@
-- bucket: "composer::GitLab Advisory Database Community"
+- bucket: "composer::GitHub Security Advisory Composer"
   pairs:
     - bucket: symfony/symfony
       pairs:
